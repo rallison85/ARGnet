@@ -1,0 +1,587 @@
+// ARGnet Database Schema
+// Comprehensive schema for Alternate Reality Game collaboration platform
+
+export const schema = `
+-- Users and Authentication
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  display_name TEXT,
+  avatar_url TEXT,
+  bio TEXT,
+  role TEXT DEFAULT 'member' CHECK(role IN ('admin', 'member')),
+  skills TEXT, -- JSON array of skills: writer, artist, programmer, designer, producer, etc.
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_login DATETIME
+);
+
+-- ARG Projects
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  description TEXT,
+  tagline TEXT,
+  status TEXT DEFAULT 'planning' CHECK(status IN ('planning', 'development', 'testing', 'live', 'concluded', 'archived')),
+  visibility TEXT DEFAULT 'private' CHECK(visibility IN ('private', 'team', 'public')),
+  cover_image_url TEXT,
+
+  -- Project metadata
+  genre TEXT, -- horror, mystery, sci-fi, fantasy, etc.
+  themes TEXT, -- JSON array
+  target_audience TEXT,
+  estimated_duration TEXT, -- e.g., "3 months", "6 weeks"
+
+  -- Timeline
+  start_date DATE,
+  end_date DATE,
+  launch_date DATE,
+
+  -- Settings
+  settings TEXT, -- JSON object for project-specific settings
+
+  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Project Team Members
+CREATE TABLE IF NOT EXISTS project_members (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT DEFAULT 'contributor' CHECK(role IN ('owner', 'admin', 'lead', 'contributor', 'viewer')),
+  department TEXT, -- writing, art, programming, design, production, qa
+  title TEXT, -- Custom title like "Lead Writer", "Puzzle Designer"
+  permissions TEXT, -- JSON object of specific permissions
+  joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, user_id)
+);
+
+-- Narrative Elements - Story Beats/Chapters
+CREATE TABLE IF NOT EXISTS story_beats (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  parent_id TEXT REFERENCES story_beats(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  content TEXT, -- Rich text content
+  summary TEXT,
+  beat_type TEXT DEFAULT 'chapter' CHECK(beat_type IN ('act', 'chapter', 'scene', 'moment', 'flashback', 'parallel')),
+  sequence_order INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'review', 'approved', 'locked')),
+
+  -- Timeline positioning
+  story_date TEXT, -- In-universe date/time
+  real_world_trigger TEXT, -- When this beat should be revealed
+
+  -- Metadata
+  mood TEXT,
+  location_id TEXT,
+  notes TEXT,
+
+  created_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Characters (In-game personas and NPCs)
+CREATE TABLE IF NOT EXISTS characters (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  aliases TEXT, -- JSON array of alternative names
+  character_type TEXT DEFAULT 'npc' CHECK(character_type IN ('protagonist', 'antagonist', 'npc', 'puppet_master', 'ai', 'organization')),
+
+  -- Character details
+  description TEXT,
+  backstory TEXT,
+  personality TEXT,
+  motivations TEXT,
+  secrets TEXT, -- Hidden from players
+
+  -- Visual
+  avatar_url TEXT,
+  gallery TEXT, -- JSON array of image URLs
+
+  -- Voice/Communication style
+  voice_notes TEXT,
+  speech_patterns TEXT,
+
+  -- Status
+  status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive', 'deceased', 'unknown', 'hidden')),
+  introduction_beat_id TEXT REFERENCES story_beats(id),
+
+  -- Metadata
+  tags TEXT, -- JSON array
+  notes TEXT,
+
+  created_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Character Relationships
+CREATE TABLE IF NOT EXISTS character_relationships (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  character_a_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  character_b_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  relationship_type TEXT NOT NULL, -- family, friend, enemy, colleague, romantic, etc.
+  description TEXT,
+  is_public INTEGER DEFAULT 1, -- Whether players know about this relationship
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- In-game Websites/Digital Properties
+CREATE TABLE IF NOT EXISTS digital_properties (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  property_type TEXT NOT NULL CHECK(property_type IN ('website', 'social_media', 'email', 'phone', 'app', 'document', 'video_channel', 'podcast', 'other')),
+
+  -- Details
+  url TEXT,
+  platform TEXT, -- For social media: twitter, instagram, tiktok, etc.
+  username TEXT,
+  description TEXT,
+  purpose TEXT, -- What this property is used for in the ARG
+
+  -- Content
+  content_guidelines TEXT,
+  posting_schedule TEXT,
+
+  -- Access
+  credentials TEXT, -- Encrypted JSON with login info
+  owner_character_id TEXT REFERENCES characters(id),
+
+  -- Status
+  status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'created', 'active', 'dormant', 'archived')),
+  launch_date DATE,
+
+  created_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Puzzles and Challenges
+CREATE TABLE IF NOT EXISTS puzzles (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  story_beat_id TEXT REFERENCES story_beats(id),
+
+  title TEXT NOT NULL,
+  description TEXT,
+  puzzle_type TEXT CHECK(puzzle_type IN ('cipher', 'code', 'riddle', 'physical', 'digital', 'social', 'meta', 'audio', 'visual', 'artefact', 'coordinates', 'other')),
+
+  -- Difficulty and timing
+  difficulty INTEGER DEFAULT 3 CHECK(difficulty BETWEEN 1 AND 5),
+  estimated_solve_time TEXT,
+
+  -- The puzzle itself
+  setup TEXT, -- How the puzzle is presented
+  solution TEXT, -- The answer/solution
+  solution_method TEXT, -- How to solve it
+  hints TEXT, -- JSON array of progressive hints
+
+  -- Requirements
+  prerequisites TEXT, -- JSON array of puzzle IDs that must be solved first
+  required_tools TEXT, -- What players need to solve this
+  required_knowledge TEXT,
+
+  -- Rewards
+  reward_type TEXT, -- story_unlock, item, information, access, etc.
+  reward_description TEXT,
+  unlocks TEXT, -- JSON array of what solving this unlocks
+
+  -- Status
+  status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'review', 'testing', 'approved', 'live', 'solved', 'archived')),
+  is_optional INTEGER DEFAULT 0,
+  is_hidden INTEGER DEFAULT 0, -- Secret puzzle
+
+  -- Testing
+  test_results TEXT, -- JSON array of test session results
+  average_solve_time TEXT,
+
+  created_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Puzzle Components/Clues
+CREATE TABLE IF NOT EXISTS puzzle_clues (
+  id TEXT PRIMARY KEY,
+  puzzle_id TEXT NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+
+  title TEXT NOT NULL,
+  clue_type TEXT CHECK(clue_type IN ('text', 'image', 'audio', 'video', 'file', 'physical', 'location', 'interaction')),
+  content TEXT,
+  asset_url TEXT,
+
+  -- Delivery
+  delivery_method TEXT, -- How the clue reaches players
+  delivery_location TEXT, -- Where the clue is found
+  delivery_trigger TEXT, -- What triggers the clue's availability
+
+  sequence_order INTEGER DEFAULT 0,
+  is_red_herring INTEGER DEFAULT 0,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trail/Rabbit Hole - The discovery path
+CREATE TABLE IF NOT EXISTS trail_nodes (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  name TEXT NOT NULL,
+  node_type TEXT CHECK(node_type IN ('entry_point', 'waypoint', 'branch', 'convergence', 'dead_end', 'secret', 'finale')),
+  description TEXT,
+
+  -- What this node contains/reveals
+  content_type TEXT, -- puzzle, story, character, location, etc.
+  content_id TEXT, -- Reference to the actual content
+
+  -- Visual positioning for trail map
+  position_x REAL DEFAULT 0,
+  position_y REAL DEFAULT 0,
+
+  -- Metadata
+  discovery_method TEXT, -- How players find this node
+  estimated_discovery_time TEXT,
+
+  status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'built', 'testing', 'live')),
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trail Connections
+CREATE TABLE IF NOT EXISTS trail_connections (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  from_node_id TEXT NOT NULL REFERENCES trail_nodes(id) ON DELETE CASCADE,
+  to_node_id TEXT NOT NULL REFERENCES trail_nodes(id) ON DELETE CASCADE,
+
+  connection_type TEXT DEFAULT 'sequential' CHECK(connection_type IN ('sequential', 'optional', 'secret', 'conditional')),
+  condition TEXT, -- What must be true for this path
+  description TEXT,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Locations (Physical and Virtual)
+CREATE TABLE IF NOT EXISTS locations (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  name TEXT NOT NULL,
+  location_type TEXT CHECK(location_type IN ('physical', 'virtual', 'hybrid', 'fictional')),
+
+  -- Physical location
+  address TEXT,
+  latitude REAL,
+  longitude REAL,
+
+  -- Virtual location
+  url TEXT,
+  access_instructions TEXT,
+
+  -- Details
+  description TEXT,
+  significance TEXT, -- Why this location matters
+  imagery TEXT, -- JSON array of image URLs
+
+  -- Usage
+  events TEXT, -- JSON array of event IDs using this location
+  accessibility_notes TEXT,
+  permissions_required TEXT,
+
+  status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'scouted', 'confirmed', 'active', 'archived')),
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Live Events
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  story_beat_id TEXT REFERENCES story_beats(id),
+  location_id TEXT REFERENCES locations(id),
+
+  title TEXT NOT NULL,
+  event_type TEXT CHECK(event_type IN ('performance', 'installation', 'meetup', 'drop', 'broadcast', 'phone_call', 'online', 'hybrid')),
+  description TEXT,
+
+  -- Timing
+  scheduled_start DATETIME,
+  scheduled_end DATETIME,
+  timezone TEXT DEFAULT 'UTC',
+
+  -- Details
+  script TEXT, -- Event script/rundown
+  requirements TEXT, -- What's needed for the event
+  contingencies TEXT, -- Backup plans
+
+  -- Staffing
+  staff_required TEXT, -- JSON array of roles needed
+
+  -- Participant info
+  max_participants INTEGER,
+  registration_required INTEGER DEFAULT 0,
+  registration_url TEXT,
+
+  -- Status
+  status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'confirmed', 'in_progress', 'completed', 'cancelled', 'postponed')),
+
+  -- Post-event
+  actual_attendance INTEGER,
+  event_notes TEXT,
+
+  created_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Event Staff Assignments
+CREATE TABLE IF NOT EXISTS event_staff (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL, -- actor, coordinator, tech, support, etc.
+  character_id TEXT REFERENCES characters(id), -- If playing a character
+  notes TEXT,
+  confirmed INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(event_id, user_id)
+);
+
+-- Assets (Files, Media)
+CREATE TABLE IF NOT EXISTS assets (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  name TEXT NOT NULL,
+  asset_type TEXT CHECK(asset_type IN ('image', 'video', 'audio', 'document', 'code', '3d_model', 'font', 'archive', 'other')),
+
+  -- File info
+  file_path TEXT NOT NULL,
+  file_size INTEGER,
+  mime_type TEXT,
+
+  -- Metadata
+  description TEXT,
+  tags TEXT, -- JSON array
+  category TEXT, -- For organization
+
+  -- Usage tracking
+  used_in TEXT, -- JSON array of references where this asset is used
+
+  -- Versions
+  version INTEGER DEFAULT 1,
+  parent_asset_id TEXT REFERENCES assets(id),
+
+  -- Status
+  status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'review', 'approved', 'published', 'archived')),
+
+  uploaded_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- World Building - Lore Entries
+CREATE TABLE IF NOT EXISTS lore_entries (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  parent_id TEXT REFERENCES lore_entries(id),
+
+  title TEXT NOT NULL,
+  category TEXT, -- history, technology, culture, organization, etc.
+  content TEXT,
+
+  -- Classification
+  is_public INTEGER DEFAULT 0, -- Player-facing or internal only
+  revelation_trigger TEXT, -- When/how this becomes known
+
+  -- Relations
+  related_characters TEXT, -- JSON array of character IDs
+  related_locations TEXT, -- JSON array of location IDs
+
+  tags TEXT,
+
+  created_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Timeline Events (In-universe chronology)
+CREATE TABLE IF NOT EXISTS timeline_events (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  title TEXT NOT NULL,
+  description TEXT,
+
+  -- When (in-universe)
+  event_date TEXT NOT NULL, -- Can be "2024-03-15" or "300 years ago" etc.
+  event_date_precision TEXT DEFAULT 'day' CHECK(event_date_precision IN ('exact', 'day', 'month', 'year', 'decade', 'era', 'unknown')),
+  is_approximate INTEGER DEFAULT 0,
+
+  -- Classification
+  event_type TEXT, -- founding, death, discovery, catastrophe, etc.
+  significance TEXT CHECK(significance IN ('minor', 'moderate', 'major', 'critical')),
+
+  -- Visibility
+  is_public INTEGER DEFAULT 0,
+
+  -- Relations
+  related_characters TEXT,
+  related_locations TEXT,
+  story_beat_id TEXT REFERENCES story_beats(id),
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tasks (Internal project management)
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  parent_task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+
+  title TEXT NOT NULL,
+  description TEXT,
+
+  -- Assignment
+  assigned_to TEXT REFERENCES users(id),
+  assigned_by TEXT REFERENCES users(id),
+
+  -- Categorization
+  department TEXT,
+  task_type TEXT, -- writing, design, code, art, production, qa, etc.
+
+  -- Priority and status
+  priority TEXT DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
+  status TEXT DEFAULT 'todo' CHECK(status IN ('todo', 'in_progress', 'review', 'blocked', 'done', 'cancelled')),
+
+  -- Timing
+  due_date DATE,
+  estimated_hours REAL,
+  actual_hours REAL,
+
+  -- Relations
+  related_entity_type TEXT, -- puzzle, character, event, etc.
+  related_entity_id TEXT,
+
+  -- Completion
+  completed_at DATETIME,
+  completed_by TEXT REFERENCES users(id),
+
+  created_by TEXT REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Comments (Universal commenting system)
+CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  -- What this comment is on
+  entity_type TEXT NOT NULL, -- puzzle, character, story_beat, etc.
+  entity_id TEXT NOT NULL,
+
+  -- Comment content
+  content TEXT NOT NULL,
+
+  -- Threading
+  parent_comment_id TEXT REFERENCES comments(id) ON DELETE CASCADE,
+
+  -- Metadata
+  is_resolved INTEGER DEFAULT 0,
+  is_pinned INTEGER DEFAULT 0,
+
+  author_id TEXT NOT NULL REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Activity Log (Audit trail)
+CREATE TABLE IF NOT EXISTS activity_log (
+  id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+
+  action TEXT NOT NULL, -- created, updated, deleted, commented, etc.
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  entity_name TEXT, -- For display purposes
+
+  -- Change details
+  changes TEXT, -- JSON object of what changed
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Player Tracking (For live ARGs)
+CREATE TABLE IF NOT EXISTS player_sessions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  player_identifier TEXT NOT NULL, -- Could be username, email hash, etc.
+  session_name TEXT,
+
+  -- Progress
+  puzzles_solved TEXT, -- JSON array of puzzle IDs
+  story_beats_reached TEXT, -- JSON array of beat IDs
+  trail_nodes_discovered TEXT, -- JSON array of node IDs
+
+  -- Engagement
+  first_contact DATETIME,
+  last_activity DATETIME,
+  total_interactions INTEGER DEFAULT 0,
+
+  -- Notes
+  notes TEXT, -- PM notes about this player/group
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Notifications
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+
+  notification_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT,
+
+  -- Link to related content
+  entity_type TEXT,
+  entity_id TEXT,
+
+  is_read INTEGER DEFAULT 0,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_story_beats_project ON story_beats(project_id);
+CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
+CREATE INDEX IF NOT EXISTS idx_puzzles_project ON puzzles(project_id);
+CREATE INDEX IF NOT EXISTS idx_trail_nodes_project ON trail_nodes(project_id);
+CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
+CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_project ON activity_log(project_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+`;
