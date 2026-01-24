@@ -103,7 +103,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'argnet-auth',
+      name: 'arg-os-auth',
       partialize: (state) => ({ token: state.token }),
       onRehydrateStorage: () => (state) => {
         state?.checkAuth();

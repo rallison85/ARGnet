@@ -1,6 +1,6 @@
-# ARGnet - Alternate Reality Game Collaboration Platform
+# ARG OS - Alternate Reality Game Collaboration Platform
 
-ARGnet is a comprehensive full-stack application designed for creating and managing Alternate Reality Games (ARGs). Built for teams of writers, artists, programmers, and designers to collaborate on immersive narrative experiences.
+ARG OS is a comprehensive full-stack application designed for creating and managing Alternate Reality Games (ARGs). Built for teams of writers, artists, programmers, and designers to collaborate on immersive narrative experiences.
 
 ## Features
 
@@ -74,7 +74,7 @@ ARGnet is a comprehensive full-stack application designed for creating and manag
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd ARGnet
+cd ARG OS
 ```
 
 2. Install dependencies:
@@ -106,15 +106,15 @@ The application will be available at:
 ### Demo Accounts
 
 If you ran the seed script, these accounts are available:
-- `admin@argnet.io` / `demo123` - Admin user
-- `writer@argnet.io` / `demo123` - Writer role
-- `artist@argnet.io` / `demo123` - Artist role
-- `dev@argnet.io` / `demo123` - Developer role
+- `admin@argos.io` / `demo123` - Admin user
+- `writer@argos.io` / `demo123` - Writer role
+- `artist@argos.io` / `demo123` - Artist role
+- `dev@argos.io` / `demo123` - Developer role
 
 ## Project Structure
 
 ```
-ARGnet/
+ARG OS/
 ├── client/                 # React frontend
 │   ├── src/
 │   │   ├── layouts/       # Page layouts

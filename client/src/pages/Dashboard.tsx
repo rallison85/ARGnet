@@ -181,7 +181,7 @@ export default function Dashboard() {
         <div className="card p-6">
           <h3 className="font-semibold text-white mb-4">Resources</h3>
           <div className="space-y-2 text-sm text-gray-400">
-            <p>ARGnet helps you design and implement alternate reality games with your team.</p>
+            <p>ARG OS helps you design and implement alternate reality games with your team.</p>
             <p className="mt-2">Features include:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
               <li>Story and narrative design</li>

@@ -32,7 +32,7 @@ export default function Login() {
   return (
     <div className="card p-8">
       <h2 className="text-2xl font-bold text-white mb-2">Welcome back</h2>
-      <p className="text-gray-400 mb-6">Sign in to your ARGnet account</p>
+      <p className="text-gray-400 mb-6">Sign in to your ARG OS account</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
@@ -87,8 +87,8 @@ export default function Login() {
 
       <div className="mt-6 p-4 bg-gray-800/50 rounded-lg">
         <p className="text-sm text-gray-400 mb-2">Demo accounts:</p>
-        <p className="text-xs text-gray-500 font-mono">admin@argnet.io / demo123</p>
-        <p className="text-xs text-gray-500 font-mono">writer@argnet.io / demo123</p>
+        <p className="text-xs text-gray-500 font-mono">admin@argos.io / demo123</p>
+        <p className="text-xs text-gray-500 font-mono">writer@argos.io / demo123</p>
       </div>
     </div>
   );

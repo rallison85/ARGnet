@@ -4,7 +4,7 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    const storedData = localStorage.getItem('argnet-auth');
+    const storedData = localStorage.getItem('arg-os-auth');
     let token: string | undefined;
 
     if (storedData) {

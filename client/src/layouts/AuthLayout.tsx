@@ -18,7 +18,7 @@ export default function AuthLayout() {
           </svg>
         </div>
         <div>
-          <h1 className="text-2xl font-bold gradient-text">ARGnet</h1>
+          <h1 className="text-2xl font-bold gradient-text">ARG OS</h1>
           <p className="text-xs text-gray-500">ARG Collaboration Platform</p>
         </div>
       </Link>
