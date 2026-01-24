@@ -9,7 +9,7 @@ const api = axios.create({
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config) => {
-  const storedData = localStorage.getItem('arg-os-auth');
+  const storedData = localStorage.getItem('arg-studio-auth');
   if (storedData) {
     try {
       const { state } = JSON.parse(storedData);
@@ -29,7 +29,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Clear auth state on unauthorized
-      localStorage.removeItem('arg-os-auth');
+      localStorage.removeItem('arg-studio-auth');
       window.location.href = '/login';
     }
     return Promise.reject(error);

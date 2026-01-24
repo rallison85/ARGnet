@@ -23,7 +23,7 @@ export default function Register() {
     setIsLoading(true);
     try {
       await registerUser(data.email, data.username, data.password, data.displayName);
-      toast.success('Account created! Welcome to ARG OS.');
+      toast.success('Account created! Welcome to ARG Studio.');
     } catch (error: unknown) {
       const message = error && typeof error === 'object' && 'response' in error
         ? (error as { response?: { data?: { error?: string } } }).response?.data?.error || 'Registration failed'

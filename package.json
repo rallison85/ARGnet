@@ -1,7 +1,7 @@
 {
-  "name": "arg-os",
+  "name": "arg-studio",
   "version": "1.0.0",
-  "description": "ARG OS - Alternate Reality Game Collaboration Platform",
+  "description": "ARG Studio - Alternate Reality Game Collaboration Platform",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",

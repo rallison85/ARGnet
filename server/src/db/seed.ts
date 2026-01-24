@@ -21,7 +21,7 @@ try {
 
   insertUser.run(
     adminId,
-    'admin@argos.io',
+    'admin@argstudio.xyz',
     'admin',
     passwordHash,
     'ARG Master',
@@ -32,7 +32,7 @@ try {
 
   insertUser.run(
     writerId,
-    'writer@argos.io',
+    'writer@argstudio.xyz',
     'storyweaver',
     passwordHash,
     'Story Weaver',
@@ -43,7 +43,7 @@ try {
 
   insertUser.run(
     artistId,
-    'artist@argos.io',
+    'artist@argstudio.xyz',
     'pixelmaker',
     passwordHash,
     'Pixel Maker',
@@ -54,7 +54,7 @@ try {
 
   insertUser.run(
     programmerId,
-    'dev@argos.io',
+    'dev@argstudio.xyz',
     'codemaster',
     passwordHash,
     'Code Master',
@@ -287,10 +287,10 @@ try {
 
   console.log('✅ Database seeded successfully!');
   console.log('\n📋 Demo accounts created:');
-  console.log('  - admin@argos.io / demo123 (Admin)');
-  console.log('  - writer@argos.io / demo123 (Writer)');
-  console.log('  - artist@argos.io / demo123 (Artist)');
-  console.log('  - dev@argos.io / demo123 (Developer)');
+  console.log('  - admin@argstudio.xyz / demo123 (Admin)');
+  console.log('  - writer@argstudio.xyz / demo123 (Writer)');
+  console.log('  - artist@argstudio.xyz / demo123 (Artist)');
+  console.log('  - dev@argstudio.xyz / demo123 (Developer)');
 } catch (error) {
   console.error('❌ Seeding failed:', error);
   process.exit(1);

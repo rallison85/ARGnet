@@ -34,7 +34,7 @@ export default function MainLayout() {
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-bold gradient-text">ARG OS</h1>
+              <h1 className="text-lg font-bold gradient-text">ARG Studio</h1>
             </div>
           </Link>
         </div>
