@@ -499,17 +499,25 @@ CREATE TABLE IF NOT EXISTS event_staff (
   UNIQUE(event_id, user_id)
 );
 
--- Assets (Files, Media)
+-- Assets (Files, Media) (Enhanced)
 CREATE TABLE IF NOT EXISTS assets (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
   name TEXT NOT NULL,
-  asset_type TEXT CHECK(asset_type IN ('image', 'video', 'audio', 'document', 'code', '3d_model', 'font', 'archive', 'other')),
+  asset_type TEXT CHECK(asset_type IN (
+    'image_prop', 'image_digital', 'image_reference',
+    'video_diegetic', 'video_production',
+    'audio_diegetic', 'audio_production',
+    'document_diegetic', 'document_production',
+    'model_3d', 'code_technical', 'print_ready',
+    'image', 'video', 'audio', 'document', 'code', '3d_model', 'font', 'archive', 'other' -- Legacy types
+  )),
 
   -- File info
   file_path TEXT NOT NULL,
-  file_size INTEGER,
+  file_size INTEGER, -- Legacy field
+  file_size_bytes INTEGER, -- New precise field (bigint stored as INTEGER in SQLite)
   mime_type TEXT,
 
   -- Metadata
@@ -517,17 +525,26 @@ CREATE TABLE IF NOT EXISTS assets (
   tags TEXT, -- JSON array
   category TEXT, -- For organization
 
-  -- Usage tracking
-  used_in TEXT, -- JSON array of references where this asset is used
-
-  -- Versions
-  version INTEGER DEFAULT 1,
+  -- Versioning
+  version INTEGER DEFAULT 1, -- Legacy field
+  version_number TEXT, -- New field: "1.0", "2.1", etc.
   parent_asset_id TEXT REFERENCES assets(id),
 
-  -- Status
-  status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'review', 'approved', 'published', 'archived')),
+  -- Dimensions (stored as JSON)
+  dimensions TEXT, -- For images: {width, height}, video: {width, height, duration_seconds}, audio: {duration_seconds}
 
-  uploaded_by TEXT REFERENCES users(id),
+  -- Usage
+  usage_rights TEXT, -- License info, attribution requirements
+  production_notes TEXT, -- Special instructions for use
+  is_diegetic INTEGER DEFAULT 1, -- Boolean: is this an in-world asset or production-only
+  used_in TEXT, -- JSON array of references where this asset is used
+
+  -- Status and workflow
+  status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'review', 'approved', 'published', 'archived')),
+  created_by_user_id TEXT REFERENCES users(id), -- Standardized naming (replaces uploaded_by)
+  approved_by_user_id TEXT REFERENCES users(id),
+  approved_at DATETIME,
+
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -825,6 +842,12 @@ CREATE INDEX IF NOT EXISTS idx_locations_coords ON locations(latitude, longitude
 CREATE INDEX IF NOT EXISTS idx_locations_fictional ON locations(is_fictional);
 CREATE INDEX IF NOT EXISTS idx_locations_permission ON locations(permission_status);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
+CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
+CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
+CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category);
+CREATE INDEX IF NOT EXISTS idx_assets_parent ON assets(parent_asset_id);
+CREATE INDEX IF NOT EXISTS idx_assets_created_by ON assets(created_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_assets_is_diegetic ON assets(is_diegetic);
 CREATE INDEX IF NOT EXISTS idx_digital_properties_project ON digital_properties(project_id);
 CREATE INDEX IF NOT EXISTS idx_digital_properties_type ON digital_properties(property_type);
 CREATE INDEX IF NOT EXISTS idx_digital_properties_status ON digital_properties(status);
