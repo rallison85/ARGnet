@@ -61,26 +61,42 @@ CREATE TABLE IF NOT EXISTS project_members (
   UNIQUE(project_id, user_id)
 );
 
--- Narrative Elements - Story Beats/Chapters
+-- Narrative Elements - Story Beats/Chapters (Enhanced)
 CREATE TABLE IF NOT EXISTS story_beats (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   parent_id TEXT REFERENCES story_beats(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
-  content TEXT, -- Rich text content
+  content TEXT, -- Rich text content (existing internal content)
   summary TEXT,
-  beat_type TEXT DEFAULT 'chapter' CHECK(beat_type IN ('act', 'chapter', 'scene', 'moment', 'flashback', 'parallel')),
+  beat_type TEXT DEFAULT 'chapter' CHECK(beat_type IN ('chapter', 'scene', 'flashback', 'revelation', 'branch_point', 'convergence', 'ending', 'secret')),
   sequence_order INTEGER DEFAULT 0,
   status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'review', 'approved', 'locked')),
 
   -- Timeline positioning
   story_date TEXT, -- In-universe date/time
-  real_world_trigger TEXT, -- When this beat should be revealed
+  real_world_trigger TEXT, -- When this beat should be revealed (legacy field)
+
+  -- Trigger system
+  trigger_type TEXT CHECK(trigger_type IN ('manual', 'puzzle_solved', 'date_reached', 'node_completed', 'player_action')),
+  trigger_config TEXT, -- JSON: stores trigger details like puzzle_id or date
+
+  -- Delivery
+  delivery_method TEXT CHECK(delivery_method IN ('website', 'social_post', 'email', 'physical_drop', 'live_event', 'automatic', 'in_app')),
+
+  -- Content split
+  player_facing_content TEXT, -- What players see
+  internal_notes TEXT, -- Production notes
+
+  -- Content metadata
+  canonical_status TEXT DEFAULT 'canon' CHECK(canonical_status IN ('canon', 'semi_canon', 'non_canon', 'retconned')),
+  reading_time_minutes INTEGER,
+  content_warnings TEXT, -- JSON array of warning tags
 
   -- Metadata
   mood TEXT,
   location_id TEXT,
-  notes TEXT,
+  notes TEXT, -- General notes (legacy)
 
   created_by TEXT REFERENCES users(id),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -658,6 +674,9 @@ CREATE TABLE IF NOT EXISTS event_puzzles (
 CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_story_beats_project ON story_beats(project_id);
+CREATE INDEX IF NOT EXISTS idx_story_beats_parent ON story_beats(parent_id);
+CREATE INDEX IF NOT EXISTS idx_story_beats_trigger_type ON story_beats(trigger_type);
+CREATE INDEX IF NOT EXISTS idx_story_beats_status ON story_beats(status);
 CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
 CREATE INDEX IF NOT EXISTS idx_character_relationships_project ON character_relationships(project_id);
 CREATE INDEX IF NOT EXISTS idx_character_relationships_char_a ON character_relationships(character_a_id);
