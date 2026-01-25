@@ -406,7 +406,7 @@ CREATE TABLE IF NOT EXISTS locations (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Live Events
+-- Live Events (Enhanced)
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -414,7 +414,11 @@ CREATE TABLE IF NOT EXISTS events (
   location_id TEXT REFERENCES locations(id),
 
   title TEXT NOT NULL,
-  event_type TEXT CHECK(event_type IN ('performance', 'installation', 'meetup', 'drop', 'broadcast', 'phone_call', 'online', 'hybrid')),
+  event_type TEXT CHECK(event_type IN (
+    'performance', 'installation', 'meetup', 'drop', 'broadcast', 'online', 'hybrid',
+    'dead_drop', 'phone_call', 'livestream', 'puzzle_release', 'content_update',
+    'player_milestone'
+  )),
   description TEXT,
 
   -- Timing
@@ -422,25 +426,40 @@ CREATE TABLE IF NOT EXISTS events (
   scheduled_end DATETIME,
   timezone TEXT DEFAULT 'UTC',
 
-  -- Details
-  script TEXT, -- Event script/rundown
-  requirements TEXT, -- What's needed for the event
-  contingencies TEXT, -- Backup plans
+  -- Location (physical and virtual)
+  virtual_location_url TEXT, -- For online/hybrid events
 
-  -- Staffing
-  staff_required TEXT, -- JSON array of roles needed
+  -- Team
+  assigned_team_members TEXT, -- JSON array of user IDs
 
   -- Participant info
+  min_attendees INTEGER,
   max_participants INTEGER,
-  registration_required INTEGER DEFAULT 0,
+  registration_required INTEGER DEFAULT 0, -- Legacy: rsvp_required
+  rsvp_required INTEGER DEFAULT 0, -- New alias
   registration_url TEXT,
+  visibility TEXT DEFAULT 'public' CHECK(visibility IN ('public', 'secret', 'invite_only')),
+
+  -- Resources
+  equipment_needed TEXT, -- JSON array of required items
+  budget_cents INTEGER, -- Store in cents for precision
+
+  -- Planning
+  script TEXT, -- Legacy: runsheet
+  runsheet TEXT, -- Detailed minute-by-minute plan
+  requirements TEXT, -- Legacy field
+  contingencies TEXT, -- Legacy field (text)
+  contingency_plans TEXT, -- JSON array of {scenario, response}
+  post_event_tasks TEXT, -- JSON array of follow-up items
+  staff_required TEXT, -- JSON array of roles needed (legacy)
 
   -- Status
-  status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'confirmed', 'in_progress', 'completed', 'cancelled', 'postponed')),
+  status TEXT DEFAULT 'planning' CHECK(status IN ('planning', 'confirmed', 'in_progress', 'completed', 'cancelled', 'postponed')),
 
   -- Post-event
   actual_attendance INTEGER,
   event_notes TEXT,
+  recording_url TEXT, -- Where recording is stored
 
   created_by TEXT REFERENCES users(id),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -773,6 +792,12 @@ CREATE INDEX IF NOT EXISTS idx_puzzles_difficulty ON puzzles(difficulty);
 CREATE INDEX IF NOT EXISTS idx_puzzles_code ON puzzles(project_id, puzzle_code);
 CREATE INDEX IF NOT EXISTS idx_trail_nodes_project ON trail_nodes(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
+CREATE INDEX IF NOT EXISTS idx_events_story_beat ON events(story_beat_id);
+CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id);
+CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_date ON events(scheduled_start);
+CREATE INDEX IF NOT EXISTS idx_events_visibility ON events(visibility);
 CREATE INDEX IF NOT EXISTS idx_locations_project ON locations(project_id);
 CREATE INDEX IF NOT EXISTS idx_locations_type ON locations(location_type);
 CREATE INDEX IF NOT EXISTS idx_locations_status ON locations(status);
