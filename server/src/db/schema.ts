@@ -619,7 +619,7 @@ CREATE TABLE IF NOT EXISTS timeline_events (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tasks (Internal project management)
+-- Tasks (Internal project management) (Enhanced)
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -629,12 +629,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT,
 
   -- Assignment
-  assigned_to TEXT REFERENCES users(id),
+  assigned_to TEXT REFERENCES users(id), -- Legacy: single assignee
+  assignee_user_ids TEXT, -- New: JSON array of user IDs
   assigned_by TEXT REFERENCES users(id),
 
   -- Categorization
-  department TEXT,
-  task_type TEXT, -- writing, design, code, art, production, qa, etc.
+  department TEXT, -- Legacy field
+  task_type TEXT, -- Legacy: writing, design, code, art, production, qa, etc.
+  category TEXT CHECK(category IN ('writing', 'design', 'technical', 'production', 'qa', 'admin', 'communication', 'other')),
 
   -- Priority and status
   priority TEXT DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
@@ -642,12 +644,22 @@ CREATE TABLE IF NOT EXISTS tasks (
 
   -- Timing
   due_date DATE,
-  estimated_hours REAL,
+  estimated_hours REAL, -- Legacy field name
+  effort_estimate_hours REAL, -- New field name (alias)
   actual_hours REAL,
 
+  -- Dependencies
+  blocked_by_task_ids TEXT, -- JSON array of task IDs that block this task
+
   -- Relations
-  related_entity_type TEXT, -- puzzle, character, event, etc.
-  related_entity_id TEXT,
+  related_entity_type TEXT, -- Legacy field name
+  related_content_type TEXT, -- New field name (alias)
+  related_entity_id TEXT, -- Legacy field name
+  related_content_id TEXT, -- New field name (alias)
+
+  -- Recurring tasks
+  is_recurring INTEGER DEFAULT 0, -- Boolean
+  recurrence_pattern TEXT, -- JSON: {frequency: 'weekly', day: 'monday'}
 
   -- Completion
   completed_at DATETIME,
@@ -871,6 +883,13 @@ CREATE INDEX IF NOT EXISTS idx_digital_properties_character ON digital_propertie
 CREATE INDEX IF NOT EXISTS idx_digital_properties_platform ON digital_properties(platform);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_recurring ON tasks(is_recurring);
+CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed_at);
 CREATE INDEX IF NOT EXISTS idx_lore_entries_project ON lore_entries(project_id);
 CREATE INDEX IF NOT EXISTS idx_lore_entries_category ON lore_entries(category);
 CREATE INDEX IF NOT EXISTS idx_lore_entries_parent ON lore_entries(parent_entry_id);
