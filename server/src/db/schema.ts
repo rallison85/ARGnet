@@ -186,30 +186,48 @@ CREATE TABLE IF NOT EXISTS digital_properties (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Puzzles and Challenges
+-- Puzzles and Challenges (Enhanced)
 CREATE TABLE IF NOT EXISTS puzzles (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   story_beat_id TEXT REFERENCES story_beats(id),
 
   title TEXT NOT NULL,
+  puzzle_code TEXT, -- e.g., "PZ-001" for easy reference
   description TEXT,
-  puzzle_type TEXT CHECK(puzzle_type IN ('cipher', 'code', 'riddle', 'physical', 'digital', 'social', 'meta', 'audio', 'visual', 'artefact', 'coordinates', 'other')),
+  puzzle_type TEXT CHECK(puzzle_type IN (
+    'cipher', 'code', 'riddle', 'physical', 'digital', 'social', 'meta',
+    'audio', 'visual', 'coordinates', 'steganography', 'osint', 'geocache',
+    'phone_tree', 'email_chain', 'collaborative', 'timed', 'live_event',
+    'artefact', 'other'
+  )),
 
   -- Difficulty and timing
   difficulty INTEGER DEFAULT 3 CHECK(difficulty BETWEEN 1 AND 5),
-  estimated_solve_time TEXT,
+  estimated_solve_time TEXT, -- Legacy field (e.g., "30 minutes")
+  estimated_solve_minutes INTEGER, -- New precise field
+
+  -- Collaboration
+  is_collaborative INTEGER DEFAULT 0, -- Requires multiple players
 
   -- The puzzle itself
   setup TEXT, -- How the puzzle is presented
   solution TEXT, -- The answer/solution
   solution_method TEXT, -- How to solve it
-  hints TEXT, -- JSON array of progressive hints
+  hints TEXT, -- JSON array of progressive hints (legacy, will be replaced in Chunk 1.5)
+
+  -- Alternative solutions and red herrings
+  alternative_solutions TEXT, -- JSON: [{solution: string, notes: string}]
+  red_herrings TEXT, -- JSON: [{herring: string, why_wrong: string}]
 
   -- Requirements
   prerequisites TEXT, -- JSON array of puzzle IDs that must be solved first
-  required_tools TEXT, -- What players need to solve this
+  required_tools TEXT, -- What players need to solve this (legacy)
+  required_materials TEXT, -- JSON array: ["internet", "printer", "smartphone"]
   required_knowledge TEXT,
+
+  -- Accessibility
+  accessibility_alternative TEXT, -- How players with disabilities can engage
 
   -- Rewards
   reward_type TEXT, -- story_unlock, item, information, access, etc.
@@ -222,8 +240,14 @@ CREATE TABLE IF NOT EXISTS puzzles (
   is_hidden INTEGER DEFAULT 0, -- Secret puzzle
 
   -- Testing
-  test_results TEXT, -- JSON array of test session results
-  average_solve_time TEXT,
+  test_results TEXT, -- JSON array of test session results (legacy)
+  testing_notes TEXT, -- Structured testing notes
+  average_solve_time TEXT, -- Legacy field
+  average_solve_minutes REAL, -- New precise field
+
+  -- Live tracking
+  live_solve_count INTEGER DEFAULT 0,
+  live_hint_usage_count INTEGER DEFAULT 0,
 
   created_by TEXT REFERENCES users(id),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -682,6 +706,11 @@ CREATE INDEX IF NOT EXISTS idx_character_relationships_project ON character_rela
 CREATE INDEX IF NOT EXISTS idx_character_relationships_char_a ON character_relationships(character_a_id);
 CREATE INDEX IF NOT EXISTS idx_character_relationships_char_b ON character_relationships(character_b_id);
 CREATE INDEX IF NOT EXISTS idx_puzzles_project ON puzzles(project_id);
+CREATE INDEX IF NOT EXISTS idx_puzzles_story_beat ON puzzles(story_beat_id);
+CREATE INDEX IF NOT EXISTS idx_puzzles_status ON puzzles(status);
+CREATE INDEX IF NOT EXISTS idx_puzzles_type ON puzzles(puzzle_type);
+CREATE INDEX IF NOT EXISTS idx_puzzles_difficulty ON puzzles(difficulty);
+CREATE INDEX IF NOT EXISTS idx_puzzles_code ON puzzles(project_id, puzzle_code);
 CREATE INDEX IF NOT EXISTS idx_trail_nodes_project ON trail_nodes(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
