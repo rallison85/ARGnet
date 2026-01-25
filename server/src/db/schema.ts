@@ -171,12 +171,16 @@ CREATE TABLE IF NOT EXISTS character_relationships (
   UNIQUE(project_id, character_a_id, character_b_id)
 );
 
--- In-game Websites/Digital Properties
+-- In-game Websites/Digital Properties (Enhanced)
 CREATE TABLE IF NOT EXISTS digital_properties (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  property_type TEXT NOT NULL CHECK(property_type IN ('website', 'social_media', 'email', 'phone', 'app', 'document', 'video_channel', 'podcast', 'other')),
+  property_type TEXT NOT NULL CHECK(property_type IN (
+    'website', 'social_media', 'email', 'phone', 'app', 'document',
+    'video_channel', 'podcast', 'discord_server', 'forum', 'blog', 'newsletter',
+    'other'
+  )),
 
   -- Details
   url TEXT,
@@ -185,16 +189,32 @@ CREATE TABLE IF NOT EXISTS digital_properties (
   description TEXT,
   purpose TEXT, -- What this property is used for in the ARG
 
-  -- Content
+  -- In-world details
+  character_id TEXT REFERENCES characters(id), -- Who "owns" this in the narrative
+  creation_date DATE, -- When account was made, for aging purposes
+  backstory TEXT, -- In-world history of this property
+
+  -- Operations
+  managed_by_user_ids TEXT, -- JSON array of team members with access
   content_guidelines TEXT,
-  posting_schedule TEXT,
+  posting_schedule TEXT, -- Legacy field
+  posting_frequency TEXT, -- e.g., "2-3 times per week"
+
+  -- Cross-promotion
+  linked_property_ids TEXT, -- JSON array of related property IDs
+
+  -- Metrics
+  follower_count INTEGER,
+  follower_goal INTEGER,
+  verification_status INTEGER DEFAULT 0, -- Boolean
+  last_post_at DATETIME,
 
   -- Access
-  credentials TEXT, -- Encrypted JSON with login info
-  owner_character_id TEXT REFERENCES characters(id),
+  credentials TEXT, -- Legacy: Encrypted JSON with login info (deprecated)
+  credentials_reference TEXT, -- Reference to password manager entry (NOT actual passwords)
 
   -- Status
-  status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'created', 'active', 'dormant', 'archived')),
+  status TEXT DEFAULT 'planning' CHECK(status IN ('planning', 'created', 'active', 'dormant', 'archived')),
   launch_date DATE,
 
   created_by TEXT REFERENCES users(id),
@@ -805,6 +825,11 @@ CREATE INDEX IF NOT EXISTS idx_locations_coords ON locations(latitude, longitude
 CREATE INDEX IF NOT EXISTS idx_locations_fictional ON locations(is_fictional);
 CREATE INDEX IF NOT EXISTS idx_locations_permission ON locations(permission_status);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
+CREATE INDEX IF NOT EXISTS idx_digital_properties_project ON digital_properties(project_id);
+CREATE INDEX IF NOT EXISTS idx_digital_properties_type ON digital_properties(property_type);
+CREATE INDEX IF NOT EXISTS idx_digital_properties_status ON digital_properties(status);
+CREATE INDEX IF NOT EXISTS idx_digital_properties_character ON digital_properties(character_id);
+CREATE INDEX IF NOT EXISTS idx_digital_properties_platform ON digital_properties(platform);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
