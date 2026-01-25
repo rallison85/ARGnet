@@ -275,6 +275,21 @@ CREATE TABLE IF NOT EXISTS puzzle_clues (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Puzzle Hints (Structured Progressive Hint System)
+CREATE TABLE IF NOT EXISTS puzzle_hints (
+  id TEXT PRIMARY KEY,
+  puzzle_id TEXT NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+  hint_order INTEGER NOT NULL,
+  hint_text TEXT NOT NULL,
+  release_trigger TEXT DEFAULT 'manual' CHECK(release_trigger IN ('manual', 'time_based', 'request_count', 'automatic')),
+  release_config TEXT, -- JSON: {minutes_after_start: 30} or {request_threshold: 5}
+  is_released INTEGER DEFAULT 0, -- Boolean: for live tracking
+  released_at DATETIME, -- When this hint was released
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(puzzle_id, hint_order)
+);
+
 -- Trail/Rabbit Hole - The discovery path
 CREATE TABLE IF NOT EXISTS trail_nodes (
   id TEXT PRIMARY KEY,
@@ -719,6 +734,11 @@ CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_project ON activity_log(project_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+
+-- Puzzle hints indexes
+CREATE INDEX IF NOT EXISTS idx_puzzle_hints_puzzle ON puzzle_hints(puzzle_id);
+CREATE INDEX IF NOT EXISTS idx_puzzle_hints_order ON puzzle_hints(puzzle_id, hint_order);
+CREATE INDEX IF NOT EXISTS idx_puzzle_hints_released ON puzzle_hints(is_released);
 
 -- Junction table indexes
 CREATE INDEX IF NOT EXISTS idx_story_beat_characters_beat ON story_beat_characters(story_beat_id);
