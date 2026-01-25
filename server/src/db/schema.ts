@@ -408,6 +408,65 @@ CREATE TABLE IF NOT EXISTS trail_map_edges (
   UNIQUE(source_node_id, target_node_id)
 );
 
+-- Trail Map Physical Points (GPS-based physical layer)
+CREATE TABLE IF NOT EXISTS trail_map_physical_points (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  -- Associations
+  node_id TEXT REFERENCES trail_map_nodes(id) ON DELETE SET NULL, -- Link to narrative node
+  location_id TEXT REFERENCES locations(id) ON DELETE SET NULL, -- Link to location entry
+
+  -- Point details
+  name TEXT NOT NULL,
+  latitude REAL NOT NULL, -- Decimal degrees (e.g., 37.7749)
+  longitude REAL NOT NULL, -- Decimal degrees (e.g., -122.4194)
+  radius_meters INTEGER DEFAULT 50, -- Detection radius for "player arrived" gameplay
+
+  point_type TEXT CHECK(point_type IN ('start', 'waypoint', 'checkpoint', 'cache', 'finale', 'optional')),
+
+  -- Player instructions
+  instructions TEXT, -- What players do at this location
+  hint_if_stuck TEXT, -- Help text if players can't find it
+
+  -- Physical interaction
+  requires_physical_presence INTEGER DEFAULT 1, -- Boolean: must be at location
+  qr_code_data TEXT, -- QR code content for scanning
+  nfc_tag_id TEXT, -- NFC tag identifier
+
+  -- Logistics
+  accessibility_notes TEXT, -- Wheelchair access, stairs, etc.
+  travel_notes TEXT, -- Parking, transit info, best times to visit
+
+  -- Management
+  is_active INTEGER DEFAULT 1, -- Boolean: for live management
+  sort_order INTEGER DEFAULT 0,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trail Map Physical Routes (Suggested paths between physical points)
+CREATE TABLE IF NOT EXISTS trail_map_physical_routes (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+  from_point_id TEXT NOT NULL REFERENCES trail_map_physical_points(id) ON DELETE CASCADE,
+  to_point_id TEXT NOT NULL REFERENCES trail_map_physical_points(id) ON DELETE CASCADE,
+
+  travel_mode TEXT DEFAULT 'walking' CHECK(travel_mode IN ('walking', 'driving', 'transit', 'any')),
+
+  -- Travel estimates
+  estimated_minutes INTEGER,
+  distance_meters INTEGER,
+
+  route_notes TEXT, -- Special directions, warnings, etc.
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  UNIQUE(from_point_id, to_point_id, travel_mode)
+);
+
 -- Locations (Physical and Virtual) (Enhanced)
 CREATE TABLE IF NOT EXISTS locations (
   id TEXT PRIMARY KEY,
@@ -911,6 +970,17 @@ CREATE INDEX IF NOT EXISTS idx_trail_map_edges_target ON trail_map_edges(target_
 CREATE INDEX IF NOT EXISTS idx_trail_map_edges_type ON trail_map_edges(edge_type);
 CREATE INDEX IF NOT EXISTS idx_trail_map_edges_active ON trail_map_edges(is_active);
 CREATE INDEX IF NOT EXISTS idx_trail_map_edges_bidirectional ON trail_map_edges(is_bidirectional);
+CREATE INDEX IF NOT EXISTS idx_physical_points_project ON trail_map_physical_points(project_id);
+CREATE INDEX IF NOT EXISTS idx_physical_points_node ON trail_map_physical_points(node_id);
+CREATE INDEX IF NOT EXISTS idx_physical_points_location ON trail_map_physical_points(location_id);
+CREATE INDEX IF NOT EXISTS idx_physical_points_type ON trail_map_physical_points(point_type);
+CREATE INDEX IF NOT EXISTS idx_physical_points_active ON trail_map_physical_points(is_active);
+CREATE INDEX IF NOT EXISTS idx_physical_points_coords ON trail_map_physical_points(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_physical_points_sort ON trail_map_physical_points(project_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_physical_routes_project ON trail_map_physical_routes(project_id);
+CREATE INDEX IF NOT EXISTS idx_physical_routes_from ON trail_map_physical_routes(from_point_id);
+CREATE INDEX IF NOT EXISTS idx_physical_routes_to ON trail_map_physical_routes(to_point_id);
+CREATE INDEX IF NOT EXISTS idx_physical_routes_mode ON trail_map_physical_routes(travel_mode);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_story_beat ON events(story_beat_id);
 CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id);
