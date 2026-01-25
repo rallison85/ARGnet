@@ -123,16 +123,20 @@ CREATE TABLE IF NOT EXISTS characters (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Character Relationships
+-- Character Relationships (Enhanced)
 CREATE TABLE IF NOT EXISTS character_relationships (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   character_a_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
   character_b_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-  relationship_type TEXT NOT NULL, -- family, friend, enemy, colleague, romantic, etc.
-  description TEXT,
-  is_public INTEGER DEFAULT 1, -- Whether players know about this relationship
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  relationship_type TEXT DEFAULT 'custom' CHECK(relationship_type IN ('ally', 'enemy', 'family', 'romantic', 'professional', 'secret_identity', 'reports_to', 'controls', 'unknown_to', 'custom')),
+  relationship_label TEXT, -- Display label like "brother of", "secretly works for"
+  is_bidirectional INTEGER DEFAULT 1, -- Boolean: does the relationship go both ways?
+  is_known_to_players INTEGER DEFAULT 0, -- Boolean: do players know about this relationship?
+  description TEXT, -- Internal notes
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, character_a_id, character_b_id)
 );
 
 -- In-game Websites/Digital Properties
@@ -655,6 +659,9 @@ CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(projec
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_story_beats_project ON story_beats(project_id);
 CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
+CREATE INDEX IF NOT EXISTS idx_character_relationships_project ON character_relationships(project_id);
+CREATE INDEX IF NOT EXISTS idx_character_relationships_char_a ON character_relationships(character_a_id);
+CREATE INDEX IF NOT EXISTS idx_character_relationships_char_b ON character_relationships(character_b_id);
 CREATE INDEX IF NOT EXISTS idx_puzzles_project ON puzzles(project_id);
 CREATE INDEX IF NOT EXISTS idx_trail_nodes_project ON trail_nodes(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
