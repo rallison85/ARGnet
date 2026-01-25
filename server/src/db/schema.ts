@@ -326,39 +326,70 @@ CREATE TABLE IF NOT EXISTS puzzle_hints (
   UNIQUE(puzzle_id, hint_order)
 );
 
--- Trail/Rabbit Hole - The discovery path
-CREATE TABLE IF NOT EXISTS trail_nodes (
+-- Trail/Rabbit Hole - The discovery path (Enhanced)
+CREATE TABLE IF NOT EXISTS trail_map_nodes (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
   name TEXT NOT NULL,
-  node_type TEXT CHECK(node_type IN ('entry_point', 'waypoint', 'branch', 'convergence', 'dead_end', 'secret', 'finale')),
+  node_type TEXT CHECK(node_type IN (
+    'entry_point', 'waypoint', 'branch', 'gate', 'merge', 'secret',
+    'bonus', 'finale', 'dead_end', 'hub',
+    'convergence' -- Legacy type for backward compatibility
+  )),
   description TEXT,
 
-  -- What this node contains/reveals
-  content_type TEXT, -- puzzle, story, character, location, etc.
-  content_id TEXT, -- Reference to the actual content
-
-  -- Visual positioning for trail map
+  -- Visual positioning
   position_x REAL DEFAULT 0,
   position_y REAL DEFAULT 0,
+  layer TEXT DEFAULT 'narrative' CHECK(layer IN ('narrative', 'physical')),
+
+  -- Content associations (what this node represents)
+  content_type TEXT, -- story_beat, puzzle, event, location, etc.
+  content_id TEXT,
+
+  -- Unlock conditions
+  unlock_condition_type TEXT DEFAULT 'always' CHECK(unlock_condition_type IN (
+    'always', 'puzzle_solved', 'time_reached', 'node_completed',
+    'manual_trigger', 'player_count', 'external_event'
+  )),
+  unlock_condition_config TEXT, -- JSON: stores condition details
+
+  -- Completion conditions
+  completion_condition_type TEXT DEFAULT 'automatic' CHECK(completion_condition_type IN (
+    'automatic', 'puzzle_solved', 'manual', 'time_based'
+  )),
+  completion_condition_config TEXT, -- JSON: stores completion details
 
   -- Metadata
+  estimated_duration_minutes INTEGER,
+  is_required INTEGER DEFAULT 1, -- Boolean: required for story completion
+  visibility TEXT DEFAULT 'always_visible' CHECK(visibility IN (
+    'always_visible', 'hidden_until_unlocked', 'teased'
+  )),
+
+  -- Live tracking
+  is_unlocked INTEGER DEFAULT 0, -- Boolean: for live tracking
+  is_completed INTEGER DEFAULT 0, -- Boolean: for live tracking
+
+  -- Organization
+  sort_order INTEGER DEFAULT 0,
+
+  -- Legacy fields
   discovery_method TEXT, -- How players find this node
   estimated_discovery_time TEXT,
-
   status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'built', 'testing', 'live')),
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Trail Connections
+-- Trail Connections (Legacy - will be replaced by trail_map_edges)
 CREATE TABLE IF NOT EXISTS trail_connections (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  from_node_id TEXT NOT NULL REFERENCES trail_nodes(id) ON DELETE CASCADE,
-  to_node_id TEXT NOT NULL REFERENCES trail_nodes(id) ON DELETE CASCADE,
+  from_node_id TEXT NOT NULL REFERENCES trail_map_nodes(id) ON DELETE CASCADE,
+  to_node_id TEXT NOT NULL REFERENCES trail_map_nodes(id) ON DELETE CASCADE,
 
   connection_type TEXT DEFAULT 'sequential' CHECK(connection_type IN ('sequential', 'optional', 'secret', 'conditional')),
   condition TEXT, -- What must be true for this path
@@ -855,7 +886,15 @@ CREATE INDEX IF NOT EXISTS idx_puzzles_status ON puzzles(status);
 CREATE INDEX IF NOT EXISTS idx_puzzles_type ON puzzles(puzzle_type);
 CREATE INDEX IF NOT EXISTS idx_puzzles_difficulty ON puzzles(difficulty);
 CREATE INDEX IF NOT EXISTS idx_puzzles_code ON puzzles(project_id, puzzle_code);
-CREATE INDEX IF NOT EXISTS idx_trail_nodes_project ON trail_nodes(project_id);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_project ON trail_map_nodes(project_id);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_type ON trail_map_nodes(node_type);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_layer ON trail_map_nodes(layer);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_status ON trail_map_nodes(status);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_unlocked ON trail_map_nodes(is_unlocked);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_completed ON trail_map_nodes(is_completed);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_visibility ON trail_map_nodes(visibility);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_content ON trail_map_nodes(content_type, content_id);
+CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_sort ON trail_map_nodes(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_story_beat ON events(story_beat_id);
 CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id);
