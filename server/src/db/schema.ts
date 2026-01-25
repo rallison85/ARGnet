@@ -384,18 +384,28 @@ CREATE TABLE IF NOT EXISTS trail_map_nodes (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Trail Connections (Legacy - will be replaced by trail_map_edges)
-CREATE TABLE IF NOT EXISTS trail_connections (
+-- Trail Map Edges (Connections between nodes)
+CREATE TABLE IF NOT EXISTS trail_map_edges (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  from_node_id TEXT NOT NULL REFERENCES trail_map_nodes(id) ON DELETE CASCADE,
-  to_node_id TEXT NOT NULL REFERENCES trail_map_nodes(id) ON DELETE CASCADE,
 
-  connection_type TEXT DEFAULT 'sequential' CHECK(connection_type IN ('sequential', 'optional', 'secret', 'conditional')),
-  condition TEXT, -- What must be true for this path
-  description TEXT,
+  source_node_id TEXT NOT NULL REFERENCES trail_map_nodes(id) ON DELETE CASCADE,
+  target_node_id TEXT NOT NULL REFERENCES trail_map_nodes(id) ON DELETE CASCADE,
 
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  edge_type TEXT DEFAULT 'automatic' CHECK(edge_type IN (
+    'automatic', 'choice', 'puzzle', 'time', 'manual', 'conditional'
+  )),
+
+  condition_config TEXT, -- JSON: stores condition details
+
+  is_bidirectional INTEGER DEFAULT 0, -- Boolean
+  label TEXT, -- What this transition represents
+  is_active INTEGER DEFAULT 1, -- Boolean: for live management
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  UNIQUE(source_node_id, target_node_id)
 );
 
 -- Locations (Physical and Virtual) (Enhanced)
@@ -895,6 +905,12 @@ CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_completed ON trail_map_nodes(is_c
 CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_visibility ON trail_map_nodes(visibility);
 CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_content ON trail_map_nodes(content_type, content_id);
 CREATE INDEX IF NOT EXISTS idx_trail_map_nodes_sort ON trail_map_nodes(project_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_trail_map_edges_project ON trail_map_edges(project_id);
+CREATE INDEX IF NOT EXISTS idx_trail_map_edges_source ON trail_map_edges(source_node_id);
+CREATE INDEX IF NOT EXISTS idx_trail_map_edges_target ON trail_map_edges(target_node_id);
+CREATE INDEX IF NOT EXISTS idx_trail_map_edges_type ON trail_map_edges(edge_type);
+CREATE INDEX IF NOT EXISTS idx_trail_map_edges_active ON trail_map_edges(is_active);
+CREATE INDEX IF NOT EXISTS idx_trail_map_edges_bidirectional ON trail_map_edges(is_bidirectional);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_story_beat ON events(story_beat_id);
 CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id);
