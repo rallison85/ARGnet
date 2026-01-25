@@ -347,33 +347,59 @@ CREATE TABLE IF NOT EXISTS trail_connections (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Locations (Physical and Virtual)
+-- Locations (Physical and Virtual) (Enhanced)
 CREATE TABLE IF NOT EXISTS locations (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
   name TEXT NOT NULL,
-  location_type TEXT CHECK(location_type IN ('physical', 'virtual', 'hybrid', 'fictional')),
+  location_type TEXT CHECK(location_type IN (
+    'physical_permanent', 'physical_temporary', 'physical_mobile',
+    'virtual_website', 'virtual_social', 'virtual_platform',
+    'hybrid', 'fictional_referenced', 'fictional_detailed',
+    'physical', 'virtual', 'fictional' -- Legacy types for compatibility
+  )),
 
   -- Physical location
   address TEXT,
   latitude REAL,
   longitude REAL,
+  plus_code TEXT, -- Google Plus Code
 
   -- Virtual location
   url TEXT,
   access_instructions TEXT,
+
+  -- Hours and contact
+  hours_of_operation TEXT, -- JSON: {monday: "9-5", tuesday: "9-5", notes: "Closed holidays"}
+  contact_info TEXT, -- Who to call if issues
 
   -- Details
   description TEXT,
   significance TEXT, -- Why this location matters
   imagery TEXT, -- JSON array of image URLs
 
-  -- Usage
-  events TEXT, -- JSON array of event IDs using this location
+  -- Accessibility and safety
   accessibility_notes TEXT,
-  permissions_required TEXT,
+  safety_notes TEXT, -- Any hazards or concerns
 
+  -- Permissions
+  permissions_required TEXT, -- Legacy field
+  permission_status TEXT DEFAULT 'not_needed' CHECK(permission_status IN ('not_needed', 'obtained', 'pending', 'denied')),
+  permission_documentation TEXT, -- Notes or file references
+
+  -- Planning
+  scouting_notes TEXT, -- Team observations from site visits
+  weather_sensitive INTEGER DEFAULT 0, -- Boolean
+  backup_location_id TEXT REFERENCES locations(id), -- Backup location
+
+  -- Classification
+  is_fictional INTEGER DEFAULT 0, -- Boolean
+
+  -- Usage
+  events TEXT, -- JSON array of event IDs using this location (legacy)
+
+  -- Status
   status TEXT DEFAULT 'planned' CHECK(status IN ('planned', 'scouted', 'confirmed', 'active', 'archived')),
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -747,6 +773,12 @@ CREATE INDEX IF NOT EXISTS idx_puzzles_difficulty ON puzzles(difficulty);
 CREATE INDEX IF NOT EXISTS idx_puzzles_code ON puzzles(project_id, puzzle_code);
 CREATE INDEX IF NOT EXISTS idx_trail_nodes_project ON trail_nodes(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
+CREATE INDEX IF NOT EXISTS idx_locations_project ON locations(project_id);
+CREATE INDEX IF NOT EXISTS idx_locations_type ON locations(location_type);
+CREATE INDEX IF NOT EXISTS idx_locations_status ON locations(status);
+CREATE INDEX IF NOT EXISTS idx_locations_coords ON locations(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_locations_fictional ON locations(is_fictional);
+CREATE INDEX IF NOT EXISTS idx_locations_permission ON locations(permission_status);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
