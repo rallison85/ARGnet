@@ -570,6 +570,86 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Junction Tables for Content Linking
+
+-- Story Beat to Characters (many-to-many)
+CREATE TABLE IF NOT EXISTS story_beat_characters (
+  id TEXT PRIMARY KEY,
+  story_beat_id TEXT NOT NULL REFERENCES story_beats(id) ON DELETE CASCADE,
+  character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  role TEXT DEFAULT 'mentioned' CHECK(role IN ('featured', 'mentioned', 'background')),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(story_beat_id, character_id)
+);
+
+-- Story Beat to Puzzles (many-to-many with relationship type)
+CREATE TABLE IF NOT EXISTS story_beat_puzzles (
+  id TEXT PRIMARY KEY,
+  story_beat_id TEXT NOT NULL REFERENCES story_beats(id) ON DELETE CASCADE,
+  puzzle_id TEXT NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+  relationship TEXT DEFAULT 'references' CHECK(relationship IN ('requires', 'unlocks', 'references')),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(story_beat_id, puzzle_id)
+);
+
+-- Story Beat to Locations (many-to-many)
+CREATE TABLE IF NOT EXISTS story_beat_locations (
+  id TEXT PRIMARY KEY,
+  story_beat_id TEXT NOT NULL REFERENCES story_beats(id) ON DELETE CASCADE,
+  location_id TEXT NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(story_beat_id, location_id)
+);
+
+-- Puzzle Prerequisites (self-referential many-to-many)
+CREATE TABLE IF NOT EXISTS puzzle_prerequisites (
+  id TEXT PRIMARY KEY,
+  puzzle_id TEXT NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+  prerequisite_puzzle_id TEXT NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(puzzle_id, prerequisite_puzzle_id),
+  CHECK(puzzle_id != prerequisite_puzzle_id)
+);
+
+-- Puzzle Unlocks (polymorphic relationship to various content types)
+CREATE TABLE IF NOT EXISTS puzzle_unlocks (
+  id TEXT PRIMARY KEY,
+  puzzle_id TEXT NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+  unlockable_type TEXT NOT NULL CHECK(unlockable_type IN ('story_beat', 'character', 'location', 'puzzle', 'event')),
+  unlockable_id TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(puzzle_id, unlockable_type, unlockable_id)
+);
+
+-- Event to Characters (many-to-many with involvement type)
+CREATE TABLE IF NOT EXISTS event_characters (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  involvement TEXT DEFAULT 'appears' CHECK(involvement IN ('appears', 'operates', 'mentioned')),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(event_id, character_id)
+);
+
+-- Event to Locations (many-to-many with primary flag)
+CREATE TABLE IF NOT EXISTS event_locations (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  location_id TEXT NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  is_primary INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(event_id, location_id)
+);
+
+-- Event to Puzzles (many-to-many)
+CREATE TABLE IF NOT EXISTS event_puzzles (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  puzzle_id TEXT NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(event_id, puzzle_id)
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
@@ -584,4 +664,22 @@ CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_project ON activity_log(project_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+
+-- Junction table indexes
+CREATE INDEX IF NOT EXISTS idx_story_beat_characters_beat ON story_beat_characters(story_beat_id);
+CREATE INDEX IF NOT EXISTS idx_story_beat_characters_character ON story_beat_characters(character_id);
+CREATE INDEX IF NOT EXISTS idx_story_beat_puzzles_beat ON story_beat_puzzles(story_beat_id);
+CREATE INDEX IF NOT EXISTS idx_story_beat_puzzles_puzzle ON story_beat_puzzles(puzzle_id);
+CREATE INDEX IF NOT EXISTS idx_story_beat_locations_beat ON story_beat_locations(story_beat_id);
+CREATE INDEX IF NOT EXISTS idx_story_beat_locations_location ON story_beat_locations(location_id);
+CREATE INDEX IF NOT EXISTS idx_puzzle_prerequisites_puzzle ON puzzle_prerequisites(puzzle_id);
+CREATE INDEX IF NOT EXISTS idx_puzzle_prerequisites_prereq ON puzzle_prerequisites(prerequisite_puzzle_id);
+CREATE INDEX IF NOT EXISTS idx_puzzle_unlocks_puzzle ON puzzle_unlocks(puzzle_id);
+CREATE INDEX IF NOT EXISTS idx_puzzle_unlocks_unlockable ON puzzle_unlocks(unlockable_type, unlockable_id);
+CREATE INDEX IF NOT EXISTS idx_event_characters_event ON event_characters(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_characters_character ON event_characters(character_id);
+CREATE INDEX IF NOT EXISTS idx_event_locations_event ON event_locations(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_locations_location ON event_locations(location_id);
+CREATE INDEX IF NOT EXISTS idx_event_puzzles_event ON event_puzzles(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_puzzles_puzzle ON event_puzzles(puzzle_id);
 `;
