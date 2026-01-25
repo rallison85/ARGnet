@@ -103,13 +103,16 @@ CREATE TABLE IF NOT EXISTS story_beats (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Characters (In-game personas and NPCs)
+-- Characters (In-game personas and NPCs) (Enhanced)
 CREATE TABLE IF NOT EXISTS characters (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   aliases TEXT, -- JSON array of alternative names
-  character_type TEXT DEFAULT 'npc' CHECK(character_type IN ('protagonist', 'antagonist', 'npc', 'puppet_master', 'ai', 'organization')),
+  character_type TEXT DEFAULT 'npc' CHECK(character_type IN (
+    'protagonist', 'antagonist', 'npc', 'puppet_master', 'autonomous_ai',
+    'organization', 'historical', 'player_created', 'ai'
+  )),
 
   -- Character details
   description TEXT,
@@ -123,12 +126,25 @@ CREATE TABLE IF NOT EXISTS characters (
   gallery TEXT, -- JSON array of image URLs
 
   -- Voice/Communication style
-  voice_notes TEXT,
-  speech_patterns TEXT,
+  voice_notes TEXT, -- Legacy field
+  voice_guide TEXT, -- Comprehensive voice guide (vocabulary, patterns, topics)
+  speech_patterns TEXT, -- Legacy field
+  sample_responses TEXT, -- JSON array of 3-5 example messages in character voice
+  communication_channels TEXT, -- JSON array of objects {platform, handle}
+
+  -- Operations
+  availability_schedule TEXT, -- JSON object with timezone and hours
+  operator_user_ids TEXT, -- JSON array of user IDs who can play this character
+  knowledge_boundaries TEXT, -- What this character knows and doesn't know
 
   -- Status
   status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive', 'deceased', 'unknown', 'hidden')),
+  is_active INTEGER DEFAULT 1, -- Boolean: can be "retired" from active use
   introduction_beat_id TEXT REFERENCES story_beats(id),
+
+  -- Tracking
+  appearance_count INTEGER DEFAULT 0, -- Track public appearances
+  last_appearance_at DATETIME, -- Last time character appeared
 
   -- Metadata
   tags TEXT, -- JSON array
@@ -717,6 +733,9 @@ CREATE INDEX IF NOT EXISTS idx_story_beats_parent ON story_beats(parent_id);
 CREATE INDEX IF NOT EXISTS idx_story_beats_trigger_type ON story_beats(trigger_type);
 CREATE INDEX IF NOT EXISTS idx_story_beats_status ON story_beats(status);
 CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
+CREATE INDEX IF NOT EXISTS idx_characters_type ON characters(character_type);
+CREATE INDEX IF NOT EXISTS idx_characters_status ON characters(status);
+CREATE INDEX IF NOT EXISTS idx_characters_active ON characters(is_active);
 CREATE INDEX IF NOT EXISTS idx_character_relationships_project ON character_relationships(project_id);
 CREATE INDEX IF NOT EXISTS idx_character_relationships_char_a ON character_relationships(character_a_id);
 CREATE INDEX IF NOT EXISTS idx_character_relationships_char_b ON character_relationships(character_b_id);
