@@ -549,25 +549,41 @@ CREATE TABLE IF NOT EXISTS assets (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- World Building - Lore Entries
+-- World Building - Lore Entries (Enhanced)
 CREATE TABLE IF NOT EXISTS lore_entries (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  parent_id TEXT REFERENCES lore_entries(id),
+  parent_entry_id TEXT REFERENCES lore_entries(id), -- Renamed from parent_id for clarity
 
   title TEXT NOT NULL,
-  category TEXT, -- history, technology, culture, organization, etc.
+  category TEXT CHECK(category IN (
+    'history', 'science', 'culture', 'geography', 'organizations',
+    'technology', 'religion', 'language', 'economy', 'characters', 'other'
+  )),
+  subcategory TEXT, -- For finer categorization
+
   content TEXT,
 
-  -- Classification
-  is_public INTEGER DEFAULT 0, -- Player-facing or internal only
-  revelation_trigger TEXT, -- When/how this becomes known
+  -- Metadata
+  tags TEXT, -- JSON array
+  timeline_position TEXT, -- When in world's history this applies
+
+  -- Canonical status
+  canonical_status TEXT DEFAULT 'canon' CHECK(canonical_status IN ('canon', 'semi_canon', 'retconned', 'speculation')),
+  in_world_source TEXT, -- Where does this info come from in-world
+  contradiction_notes TEXT, -- Conflicts with other lore
+
+  -- Reveal tracking (renamed from is_public/revelation_trigger for clarity)
+  is_revealed_to_players INTEGER DEFAULT 0, -- Boolean
+  revealed_at DATETIME,
+  reveal_method TEXT, -- How/when revealed
 
   -- Relations
   related_characters TEXT, -- JSON array of character IDs
   related_locations TEXT, -- JSON array of location IDs
 
-  tags TEXT,
+  -- Organization
+  sort_order INTEGER DEFAULT 0,
 
   created_by TEXT REFERENCES users(id),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -855,6 +871,12 @@ CREATE INDEX IF NOT EXISTS idx_digital_properties_character ON digital_propertie
 CREATE INDEX IF NOT EXISTS idx_digital_properties_platform ON digital_properties(platform);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_lore_entries_project ON lore_entries(project_id);
+CREATE INDEX IF NOT EXISTS idx_lore_entries_category ON lore_entries(category);
+CREATE INDEX IF NOT EXISTS idx_lore_entries_parent ON lore_entries(parent_entry_id);
+CREATE INDEX IF NOT EXISTS idx_lore_entries_canonical ON lore_entries(canonical_status);
+CREATE INDEX IF NOT EXISTS idx_lore_entries_revealed ON lore_entries(is_revealed_to_players);
+CREATE INDEX IF NOT EXISTS idx_lore_entries_sort ON lore_entries(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_project ON activity_log(project_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
