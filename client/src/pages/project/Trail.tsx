@@ -28,9 +28,12 @@ interface TrailNode {
 
 interface TrailConnection {
   id: string;
-  from_node_id: string;
-  to_node_id: string;
-  connection_type: string;
+  from_node_id?: string; // Legacy field
+  to_node_id?: string; // Legacy field
+  source_node_id: string; // New field
+  target_node_id: string; // New field
+  connection_type?: string; // Legacy field
+  edge_type: string; // New field
 }
 
 export default function ProjectTrail() {
@@ -59,7 +62,7 @@ export default function ProjectTrail() {
   });
 
   const createConnectionMutation = useMutation({
-    mutationFn: (data: { from_node_id: string; to_node_id: string }) =>
+    mutationFn: (data: { from_node_id: string; to_node_id: string; source_node_id?: string; target_node_id?: string }) =>
       trailApi.createConnection(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
@@ -69,32 +72,59 @@ export default function ProjectTrail() {
 
   useEffect(() => {
     if (trailData) {
-      const flowNodes: Node[] = trailData.nodes.map((node: TrailNode) => ({
-        id: node.id,
-        position: { x: node.position_x, y: node.position_y },
-        data: { label: node.name, type: node.node_type },
-        type: 'default',
-        style: {
-          background: node.node_type === 'entry_point' ? '#22c55e' :
-                      node.node_type === 'finale' ? '#ef4444' :
-                      node.node_type === 'secret' ? '#a855f7' : '#374151',
-          color: 'white',
-          border: '1px solid #4b5563',
-          borderRadius: '8px',
-          padding: '10px 15px',
-        },
-      }));
+      const flowNodes: Node[] = trailData.nodes.map((node: TrailNode) => {
+        // Determine colors based on node type
+        let bgColor = '#374151'; // default gray for waypoint
+        let borderColor = '#4b5563'; // default border
 
-      const flowEdges: Edge[] = trailData.connections.map((conn: TrailConnection) => ({
-        id: conn.id,
-        source: conn.from_node_id,
-        target: conn.to_node_id,
-        animated: conn.connection_type === 'secret',
-        style: {
-          stroke: conn.connection_type === 'secret' ? '#a855f7' :
-                  conn.connection_type === 'optional' ? '#eab308' : '#6b7280',
-        },
-      }));
+        if (node.node_type === 'entry_point') {
+          bgColor = '#22c55e'; // green
+          borderColor = '#16a34a'; // darker green
+        } else if (node.node_type === 'finale') {
+          bgColor = '#ef4444'; // red
+          borderColor = '#dc2626'; // darker red
+        } else if (node.node_type === 'secret') {
+          bgColor = '#a855f7'; // purple
+          borderColor = '#9333ea'; // darker purple
+        }
+
+        return {
+          id: node.id,
+          position: { x: node.position_x, y: node.position_y },
+          data: { label: node.name, type: node.node_type },
+          type: 'default',
+          style: {
+            background: bgColor,
+            backgroundColor: bgColor,
+            color: '#ffffff',
+            border: `2px solid ${borderColor}`,
+            borderRadius: '8px',
+            padding: '10px 15px',
+            minWidth: '150px',
+            textAlign: 'center' as const,
+          },
+        };
+      });
+
+      // Support both old 'connections' and new 'edges' format
+      const connections = trailData.edges || trailData.connections || [];
+      const flowEdges: Edge[] = connections.map((conn: TrailConnection) => {
+        // Support both old and new field names
+        const sourceId = conn.source_node_id || conn.from_node_id;
+        const targetId = conn.target_node_id || conn.to_node_id;
+        const edgeType = conn.edge_type || conn.connection_type;
+
+        return {
+          id: conn.id,
+          source: sourceId,
+          target: targetId,
+          animated: edgeType === 'secret',
+          style: {
+            stroke: edgeType === 'secret' ? '#a855f7' :
+                    edgeType === 'optional' ? '#eab308' : '#6b7280',
+          },
+        };
+      });
 
       setNodes(flowNodes);
       setEdges(flowEdges);

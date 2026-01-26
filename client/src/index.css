@@ -140,11 +140,14 @@
 
 /* React Flow customizations */
 .react-flow__node {
-  @apply !bg-gray-800 !border-gray-700 !rounded-lg !shadow-lg;
+  @apply rounded-lg shadow-lg;
+  /* Removed !bg-gray-800 and !border-gray-700 to allow inline styles */
 }
 
 .react-flow__node.selected {
-  @apply !border-arg-purple-500 !shadow-arg-purple-500/30;
+  @apply shadow-arg-purple-500/30;
+  /* Keep border for selected state but inline styles should take precedence for colors */
+  box-shadow: 0 0 0 2px rgb(168 85 247 / 0.5) !important;
 }
 
 .react-flow__edge-path {
