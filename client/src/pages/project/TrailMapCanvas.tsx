@@ -12,6 +12,7 @@ import ReactFlow, {
   Handle,
   Position,
   addEdge,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
@@ -111,6 +112,8 @@ interface TrailMapCanvasProps {
   nodes: TrailMapNode[];
   edges: TrailMapEdge[];
   onNodeClick?: (node: TrailMapNode) => void;
+  onNodeDoubleClick?: (node: TrailMapNode) => void;
+  onNodeContextMenu?: (node: TrailMapNode, event: React.MouseEvent) => void;
   onNodePositionChange?: (nodeId: string, x: number, y: number) => void;
   onEdgeCreate?: (sourceId: string, targetId: string) => void;
   selectedNodeId?: string | null;
@@ -249,9 +252,11 @@ const CustomTrailNode = memo(({ data, selected }: NodeProps<CustomNodeData>) => 
           'relative min-w-[180px] rounded-lg border-2 p-3 shadow-lg',
           'bg-gray-900/90 backdrop-blur-sm',
           'transition-all duration-200',
+          'hover:shadow-xl hover:scale-105 cursor-pointer',
           getNodeBorderColor(data.node_type),
           selected && 'ring-2 ring-arg-purple-500'
         )}
+        title={`${data.name} (${data.node_type})`}
       >
         {/* Header with icon and name */}
         <div className="flex items-center gap-2 mb-2">
@@ -324,13 +329,15 @@ const nodeTypes = {
 };
 
 // ============================================================================
-// MAIN TRAIL MAP CANVAS COMPONENT
+// MAIN TRAIL MAP CANVAS COMPONENT (INNER - HAS ACCESS TO useReactFlow)
 // ============================================================================
 
-export default function TrailMapCanvas({
+function TrailMapCanvasInner({
   nodes: trailNodes,
   edges: trailEdges,
   onNodeClick,
+  onNodeDoubleClick,
+  onNodeContextMenu,
   onNodePositionChange,
   onEdgeCreate,
   selectedNodeId,
@@ -404,6 +411,33 @@ export default function TrailMapCanvas({
   );
 
   /**
+   * Handle node double-click to edit
+   */
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node<CustomNodeData>) => {
+      if (readOnly || !onNodeDoubleClick) return;
+      if (node.data.originalNode) {
+        onNodeDoubleClick(node.data.originalNode);
+      }
+    },
+    [readOnly, onNodeDoubleClick]
+  );
+
+  /**
+   * Handle node context menu (right-click)
+   */
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node<CustomNodeData>) => {
+      event.preventDefault();
+      if (readOnly || !onNodeContextMenu) return;
+      if (node.data.originalNode) {
+        onNodeContextMenu(node.data.originalNode, event);
+      }
+    },
+    [readOnly, onNodeContextMenu]
+  );
+
+  /**
    * Handle node drag stop to update position
    */
   const handleNodeDragStop = useCallback(
@@ -453,6 +487,8 @@ export default function TrailMapCanvas({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeContextMenu={handleNodeContextMenu}
         onNodeDragStop={handleNodeDragStop}
         onConnect={handleConnect}
         nodesDraggable={!readOnly}
@@ -468,7 +504,6 @@ export default function TrailMapCanvas({
           stroke: '#a855f7',
           strokeWidth: 2,
         }}
-        connectionLineType="smoothstep"
       >
         <Background color="#374151" gap={20} />
         <Controls className="!bg-gray-800 !border-gray-700" />
@@ -496,5 +531,17 @@ export default function TrailMapCanvas({
         />
       </ReactFlow>
     </div>
+  );
+}
+
+// ============================================================================
+// OUTER COMPONENT (PROVIDES ReactFlowProvider)
+// ============================================================================
+
+export default function TrailMapCanvas(props: TrailMapCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <TrailMapCanvasInner {...props} />
+    </ReactFlowProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactFlow, {
@@ -16,14 +16,29 @@ import 'reactflow/dist/style.css';
 import { trailApi } from '../../lib/api';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import Modal from './components/Modal';
+import ConfirmDialog from './components/ConfirmDialog';
+import NodeForm from './components/NodeForm';
+import NodeContextMenu from './components/NodeContextMenu';
 
 interface TrailNode {
   id: string;
   name: string;
   node_type: string;
-  description: string;
+  description?: string;
   position_x: number;
   position_y: number;
+  layer: string;
+  content_type?: string;
+  content_id?: string;
+  unlock_condition_type?: string;
+  unlock_condition_config?: string;
+  completion_condition_type?: string;
+  completion_condition_config?: string;
+  estimated_duration_minutes?: number | null;
+  is_required?: number;
+  visibility?: string;
+  is_unlocked?: number;
 }
 
 interface TrailConnection {
@@ -43,6 +58,16 @@ export default function ProjectTrail() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  // Modal state
+  const [isCreatingNode, setIsCreatingNode] = useState(false);
+  const [editingNode, setEditingNode] = useState<TrailNode | null>(null);
+  const [nodeToDelete, setNodeToDelete] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    node: TrailNode;
+    x: number;
+    y: number;
+  } | null>(null);
+
   const { data: trailData, isLoading } = useQuery({
     queryKey: ['trail', projectId],
     queryFn: () => trailApi.get(projectId!).then(res => res.data),
@@ -52,7 +77,27 @@ export default function ProjectTrail() {
     mutationFn: (data: Partial<TrailNode>) => trailApi.createNode(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
+      setIsCreatingNode(false);
       toast.success('Node created!');
+    },
+  });
+
+  const updateNodeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<TrailNode> }) =>
+      trailApi.updateNode(projectId!, id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
+      setEditingNode(null);
+      toast.success('Node updated!');
+    },
+  });
+
+  const deleteNodeMutation = useMutation({
+    mutationFn: (nodeId: string) => trailApi.deleteNode(projectId!, nodeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
+      setNodeToDelete(null);
+      toast.success('Node deleted!');
     },
   });
 
@@ -161,13 +206,24 @@ export default function ProjectTrail() {
   }, [onNodesChange, updatePositionsMutation]);
 
   const addNode = () => {
-    const name = prompt('Enter node name:');
-    if (name) {
-      createNodeMutation.mutate({
-        name,
-        node_type: 'waypoint',
-        position_x: Math.random() * 400 + 100,
-        position_y: Math.random() * 400 + 100,
+    setIsCreatingNode(true);
+  };
+
+  const handleNodeDoubleClick = (_event: React.MouseEvent, node: Node) => {
+    const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
+    if (trailNode) {
+      setEditingNode(trailNode);
+    }
+  };
+
+  const handleNodeContextMenu = (event: React.MouseEvent, node: Node) => {
+    event.preventDefault();
+    const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
+    if (trailNode) {
+      setContextMenu({
+        node: trailNode,
+        x: event.clientX,
+        y: event.clientY,
       });
     }
   };
@@ -197,6 +253,8 @@ export default function ProjectTrail() {
           onNodesChange={onNodesChangeHandler}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          onNodeContextMenu={handleNodeContextMenu}
           fitView
         >
           <Background color="#374151" gap={20} />
@@ -219,6 +277,84 @@ export default function ProjectTrail() {
           <span className="w-3 h-3 bg-red-500 rounded" /> Finale
         </span>
       </div>
+
+      {/* Create Node Modal */}
+      <Modal
+        isOpen={isCreatingNode}
+        onClose={() => setIsCreatingNode(false)}
+        title="Create Node"
+        size="lg"
+      >
+        <NodeForm
+          projectId={projectId!}
+          onSave={(data) => createNodeMutation.mutate(data)}
+          onCancel={() => setIsCreatingNode(false)}
+          isLoading={createNodeMutation.isPending}
+          defaultPosition={{ x: 250, y: 250 }}
+        />
+      </Modal>
+
+      {/* Edit Node Modal */}
+      {editingNode && (
+        <Modal
+          isOpen={true}
+          onClose={() => setEditingNode(null)}
+          title="Edit Node"
+          size="lg"
+        >
+          <NodeForm
+            node={editingNode}
+            projectId={projectId!}
+            onSave={(data) => updateNodeMutation.mutate({ id: editingNode.id, data })}
+            onCancel={() => setEditingNode(null)}
+            onDelete={() => setNodeToDelete(editingNode.id)}
+            isLoading={updateNodeMutation.isPending}
+          />
+        </Modal>
+      )}
+
+      {/* Delete Confirmation */}
+      {nodeToDelete && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setNodeToDelete(null)}
+          onConfirm={() => deleteNodeMutation.mutate(nodeToDelete)}
+          title="Delete Node"
+          message="Are you sure you want to delete this node? This action cannot be undone and will also remove all connected edges."
+          confirmText="Delete"
+          confirmButtonClass="btn-danger"
+          isLoading={deleteNodeMutation.isPending}
+        />
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <NodeContextMenu
+          node={contextMenu.node}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          isOpen={true}
+          onClose={() => setContextMenu(null)}
+          onEdit={() => {
+            setEditingNode(contextMenu.node);
+            setContextMenu(null);
+          }}
+          onDelete={() => {
+            setNodeToDelete(contextMenu.node.id);
+            setContextMenu(null);
+          }}
+          onToggleUnlock={() => {
+            updateNodeMutation.mutate({
+              id: contextMenu.node.id,
+              data: { is_unlocked: contextMenu.node.is_unlocked === 1 ? 0 : 1 },
+            });
+            setContextMenu(null);
+          }}
+          onViewContent={() => {
+            toast('View content feature - to be implemented');
+            setContextMenu(null);
+          }}
+        />
+      )}
     </div>
   );
 }
