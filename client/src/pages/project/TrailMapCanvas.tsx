@@ -1,4 +1,4 @@
-import { useCallback, useEffect, memo } from 'react';
+import { useCallback, useEffect, memo, useRef } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -7,12 +7,14 @@ import ReactFlow, {
   Edge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   Connection,
   NodeProps,
   Handle,
   Position,
   addEdge,
   ReactFlowProvider,
+  MarkerType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
@@ -30,6 +32,7 @@ import {
   DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { cn } from '../../lib/utils';
+import CustomTrailEdge, { CustomEdgeData } from './components/CustomTrailEdge';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -116,7 +119,11 @@ interface TrailMapCanvasProps {
   onNodeContextMenu?: (node: TrailMapNode, event: React.MouseEvent) => void;
   onNodePositionChange?: (nodeId: string, x: number, y: number) => void;
   onEdgeCreate?: (sourceId: string, targetId: string) => void;
+  onEdgeClick?: (edge: TrailMapEdge) => void;
+  onEdgeContextMenu?: (edge: TrailMapEdge, event: React.MouseEvent) => void;
+  onEdgeDelete?: (edgeId: string) => void;
   selectedNodeId?: string | null;
+  selectedEdgeId?: string | null;
   readOnly?: boolean;
 }
 
@@ -172,32 +179,6 @@ const getNodeIconColor = (nodeType: TrailMapNodeType): string => {
     convergence: 'text-cyan-400',
   };
   return colorMap[nodeType] || 'text-gray-400';
-};
-
-/**
- * Get edge style based on edge type
- */
-const getEdgeStyle = (edge: TrailMapEdge): React.CSSProperties => {
-  const colorMap: Record<TrailMapEdgeType, string> = {
-    automatic: '#6b7280', // gray
-    choice: '#eab308',     // yellow
-    puzzle: '#a855f7',     // purple
-    time: '#3b82f6',       // blue
-    manual: '#22c55e',     // green
-    conditional: '#f97316', // orange
-  };
-
-  const baseStyle: React.CSSProperties = {
-    stroke: colorMap[edge.edge_type] || '#6b7280',
-    strokeWidth: 2,
-  };
-
-  // Add dashed line for choice type
-  if (edge.edge_type === 'choice') {
-    baseStyle.strokeDasharray = '5,5';
-  }
-
-  return baseStyle;
 };
 
 // ============================================================================
@@ -329,6 +310,14 @@ const nodeTypes = {
 };
 
 // ============================================================================
+// EDGE TYPES CONFIG
+// ============================================================================
+
+const edgeTypes = {
+  customTrailEdge: CustomTrailEdge,
+};
+
+// ============================================================================
 // MAIN TRAIL MAP CANVAS COMPONENT (INNER - HAS ACCESS TO useReactFlow)
 // ============================================================================
 
@@ -340,59 +329,126 @@ function TrailMapCanvasInner({
   onNodeContextMenu,
   onNodePositionChange,
   onEdgeCreate,
+  onEdgeClick,
+  onEdgeContextMenu,
+  onEdgeDelete,
   selectedNodeId,
+  selectedEdgeId,
   readOnly = false,
 }: TrailMapCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const { fitView } = useReactFlow();
+  const hasInitialFit = useRef(false);
 
   // ============================================================================
   // DATA TRANSFORMATION
   // ============================================================================
 
-  // Transform trail nodes to ReactFlow nodes
+  // Transform trail nodes to ReactFlow nodes (only when trail data changes)
+  // Preserve local positions if they exist (to handle race conditions with position saves)
   useEffect(() => {
-    const flowNodes: Node<CustomNodeData>[] = trailNodes.map((node) => ({
-      id: node.id,
-      type: 'trailNode',
-      position: { x: node.position_x, y: node.position_y },
-      data: {
-        originalNode: node,
-        name: node.name,
-        node_type: node.node_type,
-        hasContent: !!(node.content_type && node.content_id),
-        content_type: node.content_type,
-        isLocked: node.unlock_condition_type !== 'always',
-        is_required: node.is_required === 1,
-      },
-      selected: node.id === selectedNodeId,
-    }));
-    setNodes(flowNodes);
-  }, [trailNodes, selectedNodeId, setNodes]);
+    setNodes((currentNodes) => {
+      // Build a map of current local positions
+      const currentPositions = new Map<string, { x: number; y: number }>();
+      currentNodes.forEach((node) => {
+        currentPositions.set(node.id, node.position);
+      });
 
-  // Transform trail edges to ReactFlow edges
+      return trailNodes.map((node) => {
+        // Use local position if it exists (node was moved but DB not yet updated)
+        // Otherwise use the database position
+        const localPos = currentPositions.get(node.id);
+        const position = localPos || { x: node.position_x, y: node.position_y };
+
+        return {
+          id: node.id,
+          type: 'trailNode',
+          position,
+          data: {
+            originalNode: node,
+            name: node.name,
+            node_type: node.node_type,
+            hasContent: !!(node.content_type && node.content_id),
+            content_type: node.content_type,
+            isLocked: node.unlock_condition_type !== 'always',
+            is_required: node.is_required === 1,
+          },
+          selected: false,
+        };
+      });
+    });
+  }, [trailNodes, setNodes]);
+
+  // Handle node selection separately (without resetting positions)
   useEffect(() => {
-    const flowEdges: Edge[] = trailEdges.map((edge) => ({
-      id: edge.id,
-      source: edge.source_node_id,
-      target: edge.target_node_id,
-      animated: ['puzzle', 'time'].includes(edge.edge_type),
-      style: getEdgeStyle(edge),
-      label: edge.label || undefined,
-      labelStyle: {
-        fill: '#e5e7eb',
-        fontSize: 12,
-        fontWeight: 500,
-      },
-      labelBgStyle: {
-        fill: '#1f2937',
-        fillOpacity: 0.9,
-      },
-      labelBgPadding: [8, 4] as [number, number],
-      labelBgBorderRadius: 4,
-    }));
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        selected: node.id === selectedNodeId,
+      }))
+    );
+  }, [selectedNodeId, setNodes]);
+
+  // Transform trail edges to ReactFlow edges (only when trail data changes)
+  useEffect(() => {
+    const flowEdges: Edge<CustomEdgeData>[] = trailEdges.map((edge) => {
+      // Get edge color for marker
+      const colorMap: Record<TrailMapEdgeType, string> = {
+        automatic: '#6b7280',
+        choice: '#eab308',
+        puzzle: '#a855f7',
+        time: '#3b82f6',
+        manual: '#22c55e',
+        conditional: '#f97316',
+      };
+      const edgeColor = colorMap[edge.edge_type] || '#6b7280';
+
+      return {
+        id: edge.id,
+        source: edge.source_node_id,
+        target: edge.target_node_id,
+        type: 'customTrailEdge',
+        animated: ['puzzle', 'time'].includes(edge.edge_type),
+        selected: false,
+        data: {
+          edge_type: edge.edge_type,
+          is_bidirectional: edge.is_bidirectional,
+          label: edge.label,
+          is_active: edge.is_active,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 16,
+          height: 16,
+          color: edgeColor,
+        },
+      };
+    });
     setEdges(flowEdges);
   }, [trailEdges, setEdges]);
+
+  // Handle edge selection separately
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => ({
+        ...edge,
+        selected: edge.id === selectedEdgeId,
+      }))
+    );
+  }, [selectedEdgeId, setEdges]);
+
+  // Fit view only once on initial load
+  useEffect(() => {
+    if (!hasInitialFit.current && trailNodes.length > 0) {
+      // Small delay to ensure nodes are rendered
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.2, maxZoom: 1 });
+        hasInitialFit.current = true;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [trailNodes.length, fitView]);
 
   // ============================================================================
   // EVENT HANDLERS
@@ -449,6 +505,37 @@ function TrailMapCanvasInner({
   );
 
   /**
+   * Handle edge click for selection
+   */
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge<CustomEdgeData>) => {
+      if (!onEdgeClick) return;
+      // Find the original trail edge
+      const trailEdge = trailEdges.find(e => e.id === edge.id);
+      if (trailEdge) {
+        onEdgeClick(trailEdge);
+      }
+    },
+    [onEdgeClick, trailEdges]
+  );
+
+  /**
+   * Handle edge context menu (right-click)
+   */
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge<CustomEdgeData>) => {
+      event.preventDefault();
+      if (readOnly || !onEdgeContextMenu) return;
+      // Find the original trail edge
+      const trailEdge = trailEdges.find(e => e.id === edge.id);
+      if (trailEdge) {
+        onEdgeContextMenu(trailEdge, event);
+      }
+    },
+    [readOnly, onEdgeContextMenu, trailEdges]
+  );
+
+  /**
    * Handle connection creation
    */
   const handleConnect = useCallback(
@@ -459,11 +546,19 @@ function TrailMapCanvasInner({
       setEdges((eds) => addEdge({
         ...connection,
         animated: false,
-        style: {
-          stroke: '#6b7280',
-          strokeWidth: 2,
+        type: 'customTrailEdge',
+        data: {
+          edge_type: 'automatic',
+          is_bidirectional: 0,
+          label: null,
+          is_active: 1,
         },
-        type: 'smoothstep',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 16,
+          height: 16,
+          color: '#6b7280',
+        },
       }, eds));
 
       // Call the optional callback for parent component to handle persistence
@@ -472,6 +567,23 @@ function TrailMapCanvasInner({
       }
     },
     [onEdgeCreate, readOnly, setEdges]
+  );
+
+  /**
+   * Handle edge changes (including keyboard delete)
+   */
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChange>[0]) => {
+      // Intercept remove changes to call the delete API
+      for (const change of changes) {
+        if (change.type === 'remove' && onEdgeDelete) {
+          onEdgeDelete(change.id);
+        }
+      }
+      // Apply the changes to local state
+      onEdgesChange(changes);
+    },
+    [onEdgesChange, onEdgeDelete]
   );
 
   // ============================================================================
@@ -484,21 +596,23 @@ function TrailMapCanvasInner({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        onEdgesChange={handleEdgesChange}
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={handleNodeContextMenu}
         onNodeDragStop={handleNodeDragStop}
+        onEdgeClick={handleEdgeClick}
+        onEdgeContextMenu={handleEdgeContextMenu}
         onConnect={handleConnect}
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         elementsSelectable={true}
-        fitView
         minZoom={0.1}
         maxZoom={2}
         defaultEdgeOptions={{
-          type: 'smoothstep',
+          type: 'customTrailEdge',
         }}
         connectionLineStyle={{
           stroke: '#a855f7',

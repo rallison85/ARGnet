@@ -158,6 +158,42 @@ router.post('/nodes', authenticate, requireProjectAccess('contributor'), [
   res.status(201).json(node);
 });
 
+// Bulk update node positions (MUST be before /nodes/:nodeId routes)
+router.patch('/nodes/positions', authenticate, requireProjectAccess('contributor'), [
+  body('nodes').isArray()
+], (req: AuthRequest, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400).json({ errors: errors.array() });
+    return;
+  }
+
+  const { nodes } = req.body;
+
+  // Validate each node has required fields
+  for (const node of nodes) {
+    if (!node.id || typeof node.position_x !== 'number' || typeof node.position_y !== 'number') {
+      res.status(400).json({ error: 'Each node must have id, position_x (number), and position_y (number)' });
+      return;
+    }
+  }
+
+  const updateStmt = db.prepare(`
+    UPDATE trail_map_nodes SET position_x = ?, position_y = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND project_id = ?
+  `);
+
+  const updateMany = db.transaction((items: Array<{ id: string; position_x: number; position_y: number }>) => {
+    for (const item of items) {
+      updateStmt.run(item.position_x, item.position_y, item.id, req.params.projectId);
+    }
+  });
+
+  updateMany(nodes);
+
+  res.json({ message: 'Positions updated' });
+});
+
 // Get single node
 router.get('/nodes/:nodeId', authenticate, requireProjectAccess('viewer'), (req: AuthRequest, res: Response) => {
   const node = db.prepare(`
@@ -300,37 +336,6 @@ router.delete('/nodes/:nodeId', authenticate, requireProjectAccess('lead'), (req
   res.json({ message: 'Node deleted' });
 });
 
-// Bulk update node positions
-router.patch('/nodes/positions', authenticate, requireProjectAccess('contributor'), [
-  body('nodes').isArray(),
-  body('nodes.*.id').isUUID(),
-  body('nodes.*.position_x').isNumeric(),
-  body('nodes.*.position_y').isNumeric()
-], (req: AuthRequest, res: Response) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400).json({ errors: errors.array() });
-    return;
-  }
-
-  const { nodes } = req.body;
-
-  const updateStmt = db.prepare(`
-    UPDATE trail_map_nodes SET position_x = ?, position_y = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND project_id = ?
-  `);
-
-  const updateMany = db.transaction((items: Array<{ id: string; position_x: number; position_y: number }>) => {
-    for (const item of items) {
-      updateStmt.run(item.position_x, item.position_y, item.id, req.params.projectId);
-    }
-  });
-
-  updateMany(nodes);
-
-  res.json({ message: 'Positions updated' });
-});
-
 // Edges (formerly connections)
 
 // Create edge
@@ -425,7 +430,7 @@ router.post('/edges', authenticate, requireProjectAccess('contributor'), [
 
 // Update edge
 router.patch('/edges/:edgeId', authenticate, requireProjectAccess('contributor'), (req: AuthRequest, res: Response) => {
-  const allowedFields = ['edge_type', 'condition_config', 'is_bidirectional', 'label', 'is_active'];
+  const allowedFields = ['source_node_id', 'target_node_id', 'edge_type', 'condition_config', 'is_bidirectional', 'label', 'is_active'];
 
   // Validate edge_type if provided
   if (req.body.edge_type && !VALID_EDGE_TYPES.includes(req.body.edge_type)) {

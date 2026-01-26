@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectApi } from '../../lib/api';
-import { PlusIcon, UserPlusIcon } from '@heroicons/react/24/outline';
+import { UserPlusIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 

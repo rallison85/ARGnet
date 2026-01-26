@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, Link, useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { projectApi } from '../lib/api';
 import { connectSocket, disconnectSocket, joinProject, leaveProject } from '../lib/socket';
@@ -46,7 +46,6 @@ const projectNavBottom = [
 export default function ProjectLayout() {
   const { projectId } = useParams<{ projectId: string }>();
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
   const { data: project, isLoading, error } = useQuery({

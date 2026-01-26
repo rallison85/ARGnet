@@ -33,7 +33,7 @@ export default function ProjectSettings() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: typeof form & { themes: string[] }) =>
+    mutationFn: (data: Omit<typeof form, 'themes'> & { themes: string[] }) =>
       projectApi.update(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });

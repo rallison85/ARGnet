@@ -1,18 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  addEdge,
-  useNodesState,
-  useEdgesState,
-  Connection,
-  Node,
-  Edge,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
 import { trailApi } from '../../lib/api';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
@@ -20,6 +8,9 @@ import Modal from './components/Modal';
 import ConfirmDialog from './components/ConfirmDialog';
 import NodeForm from './components/NodeForm';
 import NodeContextMenu from './components/NodeContextMenu';
+import EdgeForm, { TrailMapEdge } from './components/EdgeForm';
+import EdgeContextMenu from './components/EdgeContextMenu';
+import TrailMapCanvas, { TrailMapNode } from './TrailMapCanvas';
 
 interface TrailNode {
   id: string;
@@ -41,31 +32,55 @@ interface TrailNode {
   is_unlocked?: number;
 }
 
-interface TrailConnection {
+type TrailMapEdgeType =
+  | 'automatic'
+  | 'choice'
+  | 'puzzle'
+  | 'time'
+  | 'manual'
+  | 'conditional';
+
+interface TrailEdge {
   id: string;
-  from_node_id?: string; // Legacy field
-  to_node_id?: string; // Legacy field
-  source_node_id: string; // New field
-  target_node_id: string; // New field
-  connection_type?: string; // Legacy field
-  edge_type: string; // New field
+  project_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  edge_type: TrailMapEdgeType;
+  condition_config: string | null;
+  is_bidirectional: number;
+  label: string | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function ProjectTrail() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-
-  // Modal state
+  // Node modal state
   const [isCreatingNode, setIsCreatingNode] = useState(false);
   const [editingNode, setEditingNode] = useState<TrailNode | null>(null);
   const [nodeToDelete, setNodeToDelete] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<{
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [nodeContextMenu, setNodeContextMenu] = useState<{
     node: TrailNode;
     x: number;
     y: number;
+  } | null>(null);
+
+  // Edge modal state
+  const [editingEdge, setEditingEdge] = useState<TrailEdge | null>(null);
+  const [edgeToDelete, setEdgeToDelete] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [edgeContextMenu, setEdgeContextMenu] = useState<{
+    edge: TrailEdge;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [pendingConnection, setPendingConnection] = useState<{
+    sourceId: string;
+    targetId: string;
   } | null>(null);
 
   const { data: trailData, isLoading } = useQuery({
@@ -73,12 +88,16 @@ export default function ProjectTrail() {
     queryFn: () => trailApi.get(projectId!).then(res => res.data),
   });
 
+  // Node mutations
   const createNodeMutation = useMutation({
     mutationFn: (data: Partial<TrailNode>) => trailApi.createNode(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
       setIsCreatingNode(false);
       toast.success('Node created!');
+    },
+    onError: () => {
+      toast.error('Failed to create node');
     },
   });
 
@@ -90,6 +109,9 @@ export default function ProjectTrail() {
       setEditingNode(null);
       toast.success('Node updated!');
     },
+    onError: () => {
+      toast.error('Failed to update node');
+    },
   });
 
   const deleteNodeMutation = useMutation({
@@ -97,135 +119,133 @@ export default function ProjectTrail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
       setNodeToDelete(null);
+      setSelectedNodeId(null);
       toast.success('Node deleted!');
+    },
+    onError: () => {
+      toast.error('Failed to delete node');
     },
   });
 
   const updatePositionsMutation = useMutation({
-    mutationFn: (nodes: { id: string; position_x: number; position_y: number }[]) =>
-      trailApi.updatePositions(projectId!, nodes),
-  });
-
-  const createConnectionMutation = useMutation({
-    mutationFn: (data: { from_node_id: string; to_node_id: string; source_node_id?: string; target_node_id?: string }) =>
-      trailApi.createConnection(projectId!, data),
+    mutationFn: (nodes: { id: string; position_x: number; position_y: number }[]) => {
+      console.log('Saving positions:', JSON.stringify(nodes));
+      return trailApi.updatePositions(projectId!, nodes);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
-      toast.success('Connection created!');
+      console.log('Positions saved successfully');
+    },
+    onError: (error: any) => {
+      const errorMsg = error?.response?.data?.error || error?.response?.data?.errors || error.message;
+      console.error('Position save failed:', errorMsg, error?.response?.data);
+      toast.error(`Failed to save: ${JSON.stringify(errorMsg)}`);
     },
   });
 
-  useEffect(() => {
-    if (trailData) {
-      const flowNodes: Node[] = trailData.nodes.map((node: TrailNode) => {
-        // Determine colors based on node type
-        let bgColor = '#374151'; // default gray for waypoint
-        let borderColor = '#4b5563'; // default border
+  // Edge mutations
+  const createEdgeMutation = useMutation({
+    mutationFn: (data: Partial<TrailMapEdge>) => trailApi.createEdge(projectId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
+      setPendingConnection(null);
+      toast.success('Edge created!');
+    },
+    onError: () => {
+      toast.error('Failed to create edge');
+      setPendingConnection(null);
+    },
+  });
 
-        if (node.node_type === 'entry_point') {
-          bgColor = '#22c55e'; // green
-          borderColor = '#16a34a'; // darker green
-        } else if (node.node_type === 'finale') {
-          bgColor = '#ef4444'; // red
-          borderColor = '#dc2626'; // darker red
-        } else if (node.node_type === 'secret') {
-          bgColor = '#a855f7'; // purple
-          borderColor = '#9333ea'; // darker purple
-        }
+  const updateEdgeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<TrailMapEdge> }) =>
+      trailApi.updateEdge(projectId!, id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
+      setEditingEdge(null);
+      toast.success('Edge updated!');
+    },
+    onError: () => {
+      toast.error('Failed to update edge');
+    },
+  });
 
-        return {
-          id: node.id,
-          position: { x: node.position_x, y: node.position_y },
-          data: { label: node.name, type: node.node_type },
-          type: 'default',
-          style: {
-            background: bgColor,
-            backgroundColor: bgColor,
-            color: '#ffffff',
-            border: `2px solid ${borderColor}`,
-            borderRadius: '8px',
-            padding: '10px 15px',
-            minWidth: '150px',
-            textAlign: 'center' as const,
-          },
-        };
-      });
+  const deleteEdgeMutation = useMutation({
+    mutationFn: (edgeId: string) => trailApi.deleteEdge(projectId!, edgeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
+      setEdgeToDelete(null);
+      setSelectedEdgeId(null);
+      toast.success('Edge deleted!');
+    },
+    onError: () => {
+      toast.error('Failed to delete edge');
+    },
+  });
 
-      // Support both old 'connections' and new 'edges' format
-      const connections = trailData.edges || trailData.connections || [];
-      const flowEdges: Edge[] = connections.map((conn: TrailConnection) => {
-        // Support both old and new field names
-        const sourceId = conn.source_node_id || conn.from_node_id;
-        const targetId = conn.target_node_id || conn.to_node_id;
-        const edgeType = conn.edge_type || conn.connection_type;
+  // Node handlers
+  const handleNodeClick = useCallback((node: TrailMapNode) => {
+    setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
+  }, []);
 
-        return {
-          id: conn.id,
-          source: sourceId,
-          target: targetId,
-          animated: edgeType === 'secret',
-          style: {
-            stroke: edgeType === 'secret' ? '#a855f7' :
-                    edgeType === 'optional' ? '#eab308' : '#6b7280',
-          },
-        };
-      });
-
-      setNodes(flowNodes);
-      setEdges(flowEdges);
-    }
-  }, [trailData, setNodes, setEdges]);
-
-  const onConnect = useCallback((connection: Connection) => {
-    if (connection.source && connection.target) {
-      createConnectionMutation.mutate({
-        from_node_id: connection.source,
-        to_node_id: connection.target,
-      });
-      setEdges((eds) => addEdge({ ...connection, animated: false }, eds));
-    }
-  }, [createConnectionMutation, setEdges]);
-
-  const onNodesChangeHandler = useCallback((changes: Parameters<typeof onNodesChange>[0]) => {
-    onNodesChange(changes);
-
-    const positionChanges = changes.filter(
-      (change): change is { type: 'position'; id: string; position?: { x: number; y: number }; dragging?: boolean } =>
-        change.type === 'position' && !change.dragging && !!change.position
-    );
-
-    if (positionChanges.length > 0) {
-      updatePositionsMutation.mutate(
-        positionChanges.map((change) => ({
-          id: change.id,
-          position_x: change.position!.x,
-          position_y: change.position!.y,
-        }))
-      );
-    }
-  }, [onNodesChange, updatePositionsMutation]);
-
-  const addNode = () => {
-    setIsCreatingNode(true);
-  };
-
-  const handleNodeDoubleClick = (_event: React.MouseEvent, node: Node) => {
+  const handleNodeDoubleClick = useCallback((node: TrailMapNode) => {
     const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
     if (trailNode) {
       setEditingNode(trailNode);
     }
-  };
+  }, [trailData]);
 
-  const handleNodeContextMenu = (event: React.MouseEvent, node: Node) => {
-    event.preventDefault();
+  const handleNodeContextMenu = useCallback((node: TrailMapNode, event: React.MouseEvent) => {
     const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
     if (trailNode) {
-      setContextMenu({
+      setNodeContextMenu({
         node: trailNode,
         x: event.clientX,
         y: event.clientY,
       });
     }
+  }, [trailData]);
+
+  const handleNodePositionChange = useCallback((nodeId: string, x: number, y: number) => {
+    updatePositionsMutation.mutate([{ id: nodeId, position_x: x, position_y: y }]);
+  }, [updatePositionsMutation]);
+
+  // Edge handlers
+  const handleEdgeCreate = useCallback((sourceId: string, targetId: string) => {
+    // Open EdgeForm modal to configure the new edge
+    setPendingConnection({ sourceId, targetId });
+  }, []);
+
+  const handleEdgeClick = useCallback((edge: TrailEdge) => {
+    setSelectedEdgeId(edge.id);
+    setSelectedNodeId(null);
+  }, []);
+
+  const handleEdgeContextMenu = useCallback((edge: TrailEdge, event: React.MouseEvent) => {
+    setEdgeContextMenu({
+      edge,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }, []);
+
+  const handleEdgeReverse = useCallback((edge: TrailEdge) => {
+    updateEdgeMutation.mutate({
+      id: edge.id,
+      data: {
+        source_node_id: edge.target_node_id,
+        target_node_id: edge.source_node_id,
+      },
+    });
+  }, [updateEdgeMutation]);
+
+  // Direct edge delete (for keyboard delete, no confirmation)
+  const handleEdgeDeleteDirect = useCallback((edgeId: string) => {
+    deleteEdgeMutation.mutate(edgeId);
+  }, [deleteEdgeMutation]);
+
+  const addNode = () => {
+    setIsCreatingNode(true);
   };
 
   if (isLoading) {
@@ -236,46 +256,107 @@ export default function ProjectTrail() {
     );
   }
 
+  // Prepare nodes and edges for TrailMapCanvas
+  const nodes = trailData?.nodes || [];
+  const edges = trailData?.edges || trailData?.connections || [];
+
+  // Calculate a smart default position for new nodes (offset from existing nodes)
+  const getDefaultNodePosition = () => {
+    if (nodes.length === 0) {
+      return { x: 250, y: 100 };
+    }
+    // Find the rightmost node and place new node to its right
+    const maxX = Math.max(...nodes.map((n: TrailNode) => n.position_x || 0));
+    const avgY = nodes.reduce((sum: number, n: TrailNode) => sum + (n.position_y || 0), 0) / nodes.length;
+    return { x: maxX + 250, y: avgY };
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="page-header">Trail Map</h1>
-        <button onClick={addNode} className="btn btn-primary flex items-center gap-2">
-          <PlusIcon className="w-5 h-5" />
-          Add Node
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={addNode} className="btn btn-primary flex items-center gap-2">
+            <PlusIcon className="w-5 h-5" />
+            Add Node
+          </button>
+        </div>
       </div>
 
       <div className="card h-[calc(100vh-16rem)]">
-        <ReactFlow
+        <TrailMapCanvas
+          projectId={projectId!}
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChangeHandler}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
           onNodeContextMenu={handleNodeContextMenu}
-          fitView
-        >
-          <Background color="#374151" gap={20} />
-          <Controls />
-          <MiniMap />
-        </ReactFlow>
+          onNodePositionChange={handleNodePositionChange}
+          onEdgeCreate={handleEdgeCreate}
+          onEdgeClick={handleEdgeClick}
+          onEdgeContextMenu={handleEdgeContextMenu}
+          onEdgeDelete={handleEdgeDeleteDirect}
+          selectedNodeId={selectedNodeId}
+          selectedEdgeId={selectedEdgeId}
+        />
       </div>
 
-      <div className="flex gap-4 text-sm text-gray-400">
-        <span className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-green-500 rounded" /> Entry Point
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-gray-600 rounded" /> Waypoint
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-arg-purple-500 rounded" /> Secret
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-red-500 rounded" /> Finale
-        </span>
+      {/* Legend */}
+      <div className="text-sm text-gray-400 space-y-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="font-medium text-gray-300">Nodes:</span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-green-500 rounded" /> Entry
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-gray-600 rounded" /> Waypoint
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-blue-500 rounded" /> Branch
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-yellow-500 rounded" /> Gate
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-cyan-500 rounded" /> Merge
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-purple-500 rounded" /> Secret
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-pink-500 rounded" /> Bonus
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-red-500 rounded" /> Finale
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-gray-700 rounded" /> Dead End
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 bg-cyan-400 rounded" /> Hub
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="font-medium text-gray-300">Edges:</span>
+          <span className="flex items-center gap-2">
+            <span className="w-6 h-0.5 bg-gray-500" /> Auto
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #eab308 0, #eab308 4px, transparent 4px, transparent 6px)' }} /> Choice
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #a855f7 0, #a855f7 2px, transparent 2px, transparent 4px)' }} /> Puzzle
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #3b82f6 0, #3b82f6 6px, transparent 6px, transparent 9px)' }} /> Time
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #22c55e 0, #22c55e 4px, transparent 4px, transparent 6px, #22c55e 6px, #22c55e 7px, transparent 7px, transparent 9px)' }} /> Manual
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #f97316 0, #f97316 2px, transparent 2px, transparent 4px, #f97316 4px, #f97316 6px, transparent 6px, transparent 10px)' }} /> Cond
+          </span>
+        </div>
       </div>
 
       {/* Create Node Modal */}
@@ -290,7 +371,7 @@ export default function ProjectTrail() {
           onSave={(data) => createNodeMutation.mutate(data)}
           onCancel={() => setIsCreatingNode(false)}
           isLoading={createNodeMutation.isPending}
-          defaultPosition={{ x: 250, y: 250 }}
+          defaultPosition={getDefaultNodePosition()}
         />
       </Modal>
 
@@ -313,7 +394,47 @@ export default function ProjectTrail() {
         </Modal>
       )}
 
-      {/* Delete Confirmation */}
+      {/* Create Edge Modal */}
+      {pendingConnection && (
+        <Modal
+          isOpen={true}
+          onClose={() => setPendingConnection(null)}
+          title="Create Edge"
+          size="md"
+        >
+          <EdgeForm
+            projectId={projectId!}
+            sourceNodeId={pendingConnection.sourceId}
+            targetNodeId={pendingConnection.targetId}
+            onSave={(data) => createEdgeMutation.mutate(data)}
+            onCancel={() => setPendingConnection(null)}
+            isLoading={createEdgeMutation.isPending}
+          />
+        </Modal>
+      )}
+
+      {/* Edit Edge Modal */}
+      {editingEdge && (
+        <Modal
+          isOpen={true}
+          onClose={() => setEditingEdge(null)}
+          title="Edit Edge"
+          size="md"
+        >
+          <EdgeForm
+            edge={editingEdge}
+            projectId={projectId!}
+            sourceNodeId={editingEdge.source_node_id}
+            targetNodeId={editingEdge.target_node_id}
+            onSave={(data) => updateEdgeMutation.mutate({ id: editingEdge.id, data })}
+            onCancel={() => setEditingEdge(null)}
+            onDelete={() => setEdgeToDelete(editingEdge.id)}
+            isLoading={updateEdgeMutation.isPending}
+          />
+        </Modal>
+      )}
+
+      {/* Delete Node Confirmation */}
       {nodeToDelete && (
         <ConfirmDialog
           isOpen={true}
@@ -327,31 +448,67 @@ export default function ProjectTrail() {
         />
       )}
 
-      {/* Context Menu */}
-      {contextMenu && (
-        <NodeContextMenu
-          node={contextMenu.node}
-          position={{ x: contextMenu.x, y: contextMenu.y }}
+      {/* Delete Edge Confirmation */}
+      {edgeToDelete && (
+        <ConfirmDialog
           isOpen={true}
-          onClose={() => setContextMenu(null)}
+          onClose={() => setEdgeToDelete(null)}
+          onConfirm={() => deleteEdgeMutation.mutate(edgeToDelete)}
+          title="Delete Edge"
+          message="Are you sure you want to delete this edge? This action cannot be undone."
+          confirmText="Delete"
+          confirmButtonClass="btn-danger"
+          isLoading={deleteEdgeMutation.isPending}
+        />
+      )}
+
+      {/* Node Context Menu */}
+      {nodeContextMenu && (
+        <NodeContextMenu
+          node={nodeContextMenu.node}
+          position={{ x: nodeContextMenu.x, y: nodeContextMenu.y }}
+          isOpen={true}
+          onClose={() => setNodeContextMenu(null)}
           onEdit={() => {
-            setEditingNode(contextMenu.node);
-            setContextMenu(null);
+            setEditingNode(nodeContextMenu.node);
+            setNodeContextMenu(null);
           }}
           onDelete={() => {
-            setNodeToDelete(contextMenu.node.id);
-            setContextMenu(null);
+            setNodeToDelete(nodeContextMenu.node.id);
+            setNodeContextMenu(null);
           }}
           onToggleUnlock={() => {
             updateNodeMutation.mutate({
-              id: contextMenu.node.id,
-              data: { is_unlocked: contextMenu.node.is_unlocked === 1 ? 0 : 1 },
+              id: nodeContextMenu.node.id,
+              data: { is_unlocked: nodeContextMenu.node.is_unlocked === 1 ? 0 : 1 },
             });
-            setContextMenu(null);
+            setNodeContextMenu(null);
           }}
           onViewContent={() => {
             toast('View content feature - to be implemented');
-            setContextMenu(null);
+            setNodeContextMenu(null);
+          }}
+        />
+      )}
+
+      {/* Edge Context Menu */}
+      {edgeContextMenu && (
+        <EdgeContextMenu
+          edge={edgeContextMenu.edge}
+          position={{ x: edgeContextMenu.x, y: edgeContextMenu.y }}
+          isOpen={true}
+          onClose={() => setEdgeContextMenu(null)}
+          onEdit={() => {
+            setEditingEdge(edgeContextMenu.edge);
+            setEdgeContextMenu(null);
+          }}
+          onDelete={() => {
+            setEdgeToDelete(edgeContextMenu.edge.id);
+            setEdgeContextMenu(null);
+          }}
+          onReverse={() => {
+            handleEdgeReverse(edgeContextMenu.edge);
+            setEdgeContextMenu(null);
           }}
         />
       )}

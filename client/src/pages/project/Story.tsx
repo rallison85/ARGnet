@@ -165,14 +165,12 @@ export default function ProjectStory() {
       <div className="flex-1 card p-6 overflow-y-auto">
         {isCreating ? (
           <BeatEditor
-            projectId={projectId!}
             onSave={(data) => createMutation.mutate(data)}
             onCancel={() => setIsCreating(false)}
             isLoading={createMutation.isPending}
           />
         ) : selectedBeat ? (
           <BeatEditor
-            projectId={projectId!}
             beat={selectedBeat}
             onSave={(data) => updateMutation.mutate({ id: selectedBeat.id, data })}
             onCancel={() => setSelectedBeat(null)}
@@ -189,13 +187,11 @@ export default function ProjectStory() {
 }
 
 function BeatEditor({
-  projectId,
   beat,
   onSave,
   onCancel,
   isLoading,
 }: {
-  projectId: string;
   beat?: StoryBeat;
   onSave: (data: Partial<StoryBeat>) => void;
   onCancel: () => void;
