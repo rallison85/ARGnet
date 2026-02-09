@@ -102,7 +102,9 @@ export const puzzleApi = {
 };
 
 export const trailApi = {
-  get: (projectId: string) => api.get(`/projects/${projectId}/trails`),
+  get: (projectId: string, layer?: string) =>
+    api.get(`/projects/${projectId}/trails`, { params: layer ? { layer } : undefined }),
+  validate: (projectId: string) => api.get(`/projects/${projectId}/trails/validate`),
   createNode: (projectId: string, data: unknown) => api.post(`/projects/${projectId}/trails/nodes`, data),
   updateNode: (projectId: string, nodeId: string, data: unknown) =>
     api.patch(`/projects/${projectId}/trails/nodes/${nodeId}`, data),

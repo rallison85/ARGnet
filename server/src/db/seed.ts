@@ -107,7 +107,7 @@ try {
     'Act 1: Discovery',
     'The players begin to notice strange patterns in their social media feeds. A mysterious account called @TheHollowNetwork starts following them.',
     'Players discover the existence of The Hollow Network',
-    'act',
+    'chapter',
     1,
     'approved',
     adminId

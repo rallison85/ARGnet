@@ -1,6 +1,7 @@
 import { useCallback, useEffect, memo, useRef } from 'react';
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   Node,
@@ -125,6 +126,8 @@ interface TrailMapCanvasProps {
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
   readOnly?: boolean;
+  onFitView?: (fn: () => void) => void;
+  layer?: string;
 }
 
 interface CustomNodeData {
@@ -335,6 +338,8 @@ function TrailMapCanvasInner({
   selectedNodeId,
   selectedEdgeId,
   readOnly = false,
+  onFitView,
+  layer,
 }: TrailMapCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -449,6 +454,13 @@ function TrailMapCanvasInner({
       return () => clearTimeout(timer);
     }
   }, [trailNodes.length, fitView]);
+
+  // Expose fitView to parent via callback
+  useEffect(() => {
+    if (onFitView) {
+      onFitView(() => fitView({ padding: 0.2, maxZoom: 1 }));
+    }
+  }, [onFitView, fitView]);
 
   // ============================================================================
   // EVENT HANDLERS
@@ -619,7 +631,11 @@ function TrailMapCanvasInner({
           strokeWidth: 2,
         }}
       >
-        <Background color="#374151" gap={20} />
+        <Background
+          color="#374151"
+          gap={20}
+          variant={layer === 'physical' ? BackgroundVariant.Lines : BackgroundVariant.Dots}
+        />
         <Controls className="!bg-gray-800 !border-gray-700" />
         <MiniMap
           className="!bg-gray-900 !border-gray-700"

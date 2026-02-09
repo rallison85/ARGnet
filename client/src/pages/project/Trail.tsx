@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trailApi } from '../../lib/api';
-import { PlusIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { cn } from '../../lib/utils';
 import Modal from './components/Modal';
 import ConfirmDialog from './components/ConfirmDialog';
 import NodeForm from './components/NodeForm';
@@ -11,6 +11,9 @@ import NodeContextMenu from './components/NodeContextMenu';
 import EdgeForm, { TrailMapEdge } from './components/EdgeForm';
 import EdgeContextMenu from './components/EdgeContextMenu';
 import TrailMapCanvas, { TrailMapNode } from './TrailMapCanvas';
+import TrailMapToolbar from './components/TrailMapToolbar';
+import TrailMapSidebar from './components/TrailMapSidebar';
+import ValidationModal from './components/ValidationModal';
 
 interface TrailNode {
   id: string;
@@ -54,9 +57,32 @@ interface TrailEdge {
   updated_at: string;
 }
 
+type LayerFilter = 'narrative' | 'physical' | 'all';
+
+const layerTabs: { value: LayerFilter; label: string }[] = [
+  { value: 'all', label: 'Both' },
+  { value: 'narrative', label: 'Narrative' },
+  { value: 'physical', label: 'Physical' },
+];
+
 export default function ProjectTrail() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
+
+  // Layer & view state
+  const [activeLayer, setActiveLayer] = useState<LayerFilter>('all');
+  const [connectMode, setConnectMode] = useState(false);
+
+  // Save indicator
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  // Validation state
+  const [showValidation, setShowValidation] = useState(false);
+  const [validationResults, setValidationResults] = useState<any[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+
+  // FitView ref
+  const fitViewFnRef = useRef<(() => void) | null>(null);
 
   // Node modal state
   const [isCreatingNode, setIsCreatingNode] = useState(false);
@@ -84,8 +110,8 @@ export default function ProjectTrail() {
   } | null>(null);
 
   const { data: trailData, isLoading } = useQuery({
-    queryKey: ['trail', projectId],
-    queryFn: () => trailApi.get(projectId!).then(res => res.data),
+    queryKey: ['trail', projectId, activeLayer],
+    queryFn: () => trailApi.get(projectId!, activeLayer !== 'all' ? activeLayer : undefined).then(res => res.data),
   });
 
   // Node mutations
@@ -128,12 +154,10 @@ export default function ProjectTrail() {
   });
 
   const updatePositionsMutation = useMutation({
-    mutationFn: (nodes: { id: string; position_x: number; position_y: number }[]) => {
-      console.log('Saving positions:', JSON.stringify(nodes));
-      return trailApi.updatePositions(projectId!, nodes);
-    },
+    mutationFn: (nodes: { id: string; position_x: number; position_y: number }[]) =>
+      trailApi.updatePositions(projectId!, nodes),
     onSuccess: () => {
-      console.log('Positions saved successfully');
+      setLastSaved(new Date());
     },
     onError: (error: any) => {
       const errorMsg = error?.response?.data?.error || error?.response?.data?.errors || error.message;
@@ -182,6 +206,21 @@ export default function ProjectTrail() {
     },
   });
 
+  // Validation handler
+  const handleValidate = useCallback(async () => {
+    setIsValidating(true);
+    setShowValidation(true);
+    try {
+      const res = await trailApi.validate(projectId!);
+      setValidationResults(res.data.issues || []);
+    } catch {
+      toast.error('Failed to validate trail');
+      setValidationResults([]);
+    } finally {
+      setIsValidating(false);
+    }
+  }, [projectId]);
+
   // Node handlers
   const handleNodeClick = useCallback((node: TrailMapNode) => {
     setSelectedNodeId(node.id);
@@ -212,7 +251,6 @@ export default function ProjectTrail() {
 
   // Edge handlers
   const handleEdgeCreate = useCallback((sourceId: string, targetId: string) => {
-    // Open EdgeForm modal to configure the new edge
     setPendingConnection({ sourceId, targetId });
   }, []);
 
@@ -239,14 +277,23 @@ export default function ProjectTrail() {
     });
   }, [updateEdgeMutation]);
 
-  // Direct edge delete (for keyboard delete, no confirmation)
   const handleEdgeDeleteDirect = useCallback((edgeId: string) => {
     deleteEdgeMutation.mutate(edgeId);
   }, [deleteEdgeMutation]);
 
-  const addNode = () => {
-    setIsCreatingNode(true);
-  };
+  // FitView callback from canvas
+  const handleFitViewReady = useCallback((fn: () => void) => {
+    fitViewFnRef.current = fn;
+  }, []);
+
+  // Sidebar handlers
+  const handleSidebarEdit = useCallback((node: TrailNode) => {
+    setEditingNode(node);
+  }, []);
+
+  const handleSidebarDelete = useCallback((nodeId: string) => {
+    setNodeToDelete(nodeId);
+  }, []);
 
   if (isLoading) {
     return (
@@ -259,105 +306,92 @@ export default function ProjectTrail() {
   // Prepare nodes and edges for TrailMapCanvas
   const nodes = trailData?.nodes || [];
   const edges = trailData?.edges || trailData?.connections || [];
+  const selectedNode = selectedNodeId
+    ? nodes.find((n: TrailNode) => n.id === selectedNodeId) || null
+    : null;
 
-  // Calculate a smart default position for new nodes (offset from existing nodes)
+  // Calculate a smart default position for new nodes
   const getDefaultNodePosition = () => {
     if (nodes.length === 0) {
       return { x: 250, y: 100 };
     }
-    // Find the rightmost node and place new node to its right
     const maxX = Math.max(...nodes.map((n: TrailNode) => n.position_x || 0));
     const avgY = nodes.reduce((sum: number, n: TrailNode) => sum + (n.position_y || 0), 0) / nodes.length;
     return { x: maxX + 250, y: avgY };
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {/* Header with layer toggle */}
       <div className="flex items-center justify-between">
         <h1 className="page-header">Trail Map</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={addNode} className="btn btn-primary flex items-center gap-2">
-            <PlusIcon className="w-5 h-5" />
-            Add Node
-          </button>
+        <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700 rounded-lg p-1">
+          {layerTabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveLayer(tab.value)}
+              className={cn(
+                'px-3 py-1.5 text-sm rounded-md transition-colors',
+                activeLayer === tab.value
+                  ? 'bg-arg-purple-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="card h-[calc(100vh-16rem)]">
-        <TrailMapCanvas
-          projectId={projectId!}
+      {/* Toolbar */}
+      <TrailMapToolbar
+        onAddNode={() => setIsCreatingNode(true)}
+        onFitView={() => fitViewFnRef.current?.()}
+        onValidate={handleValidate}
+        connectMode={connectMode}
+        onConnectModeToggle={() => setConnectMode((m) => !m)}
+        isSaving={updatePositionsMutation.isPending}
+        lastSaved={lastSaved}
+      />
+
+      {/* Main area: Canvas + Sidebar */}
+      <div className="flex gap-3 h-[calc(100vh-18rem)]">
+        <div className="flex-1 card">
+          <TrailMapCanvas
+            projectId={projectId!}
+            nodes={nodes}
+            edges={edges}
+            onNodeClick={handleNodeClick}
+            onNodeDoubleClick={handleNodeDoubleClick}
+            onNodeContextMenu={handleNodeContextMenu}
+            onNodePositionChange={handleNodePositionChange}
+            onEdgeCreate={handleEdgeCreate}
+            onEdgeClick={handleEdgeClick}
+            onEdgeContextMenu={handleEdgeContextMenu}
+            onEdgeDelete={handleEdgeDeleteDirect}
+            selectedNodeId={selectedNodeId}
+            selectedEdgeId={selectedEdgeId}
+            onFitView={handleFitViewReady}
+            layer={activeLayer !== 'all' ? activeLayer : undefined}
+          />
+        </div>
+
+        <TrailMapSidebar
+          selectedNode={selectedNode}
           nodes={nodes}
           edges={edges}
-          onNodeClick={handleNodeClick}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          onNodeContextMenu={handleNodeContextMenu}
-          onNodePositionChange={handleNodePositionChange}
-          onEdgeCreate={handleEdgeCreate}
-          onEdgeClick={handleEdgeClick}
-          onEdgeContextMenu={handleEdgeContextMenu}
-          onEdgeDelete={handleEdgeDeleteDirect}
-          selectedNodeId={selectedNodeId}
-          selectedEdgeId={selectedEdgeId}
+          onEdit={handleSidebarEdit}
+          onDelete={handleSidebarDelete}
         />
       </div>
 
-      {/* Legend */}
-      <div className="text-sm text-gray-400 space-y-2">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="font-medium text-gray-300">Nodes:</span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-green-500 rounded" /> Entry
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-gray-600 rounded" /> Waypoint
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-blue-500 rounded" /> Branch
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-yellow-500 rounded" /> Gate
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-cyan-500 rounded" /> Merge
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-purple-500 rounded" /> Secret
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-pink-500 rounded" /> Bonus
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-red-500 rounded" /> Finale
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-gray-700 rounded" /> Dead End
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-cyan-400 rounded" /> Hub
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <span className="font-medium text-gray-300">Edges:</span>
-          <span className="flex items-center gap-2">
-            <span className="w-6 h-0.5 bg-gray-500" /> Auto
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #eab308 0, #eab308 4px, transparent 4px, transparent 6px)' }} /> Choice
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #a855f7 0, #a855f7 2px, transparent 2px, transparent 4px)' }} /> Puzzle
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #3b82f6 0, #3b82f6 6px, transparent 6px, transparent 9px)' }} /> Time
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #22c55e 0, #22c55e 4px, transparent 4px, transparent 6px, #22c55e 6px, #22c55e 7px, transparent 7px, transparent 9px)' }} /> Manual
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #f97316 0, #f97316 2px, transparent 2px, transparent 4px, #f97316 4px, #f97316 6px, transparent 6px, transparent 10px)' }} /> Cond
-          </span>
-        </div>
-      </div>
+      {/* Validation Modal */}
+      <ValidationModal
+        isOpen={showValidation}
+        onClose={() => setShowValidation(false)}
+        issues={validationResults}
+        isValidating={isValidating}
+      />
 
       {/* Create Node Modal */}
       <Modal
