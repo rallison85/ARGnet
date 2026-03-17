@@ -5,26 +5,7 @@ import { ChevronDownIcon } from '@heroicons/react/24/outline';
 import { puzzleApi, eventApi, locationApi, storyApi } from '../../../lib/api';
 import { cn } from '../../../lib/utils';
 import toast from 'react-hot-toast';
-
-interface TrailMapNode {
-  id: string;
-  name: string;
-  node_type: string;
-  description?: string;
-  layer: string;
-  content_type?: string;
-  content_id?: string;
-  unlock_condition_type?: string;
-  unlock_condition_config?: string;
-  completion_condition_type?: string;
-  completion_condition_config?: string;
-  estimated_duration_minutes?: number | null;
-  is_required?: number;
-  visibility?: string;
-  position_x: number;
-  position_y: number;
-  is_unlocked?: number;
-}
+import { TrailMapNode, TrailMapNodeType, UnlockConditionType } from '../types/trail';
 
 interface NodeFormProps {
   node?: TrailMapNode;
@@ -124,7 +105,7 @@ export default function NodeForm({
   };
 
   const handleUnlockConditionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setForm({ ...form, unlock_condition_type: e.target.value, unlock_condition_config: '' });
+    setForm({ ...form, unlock_condition_type: e.target.value as UnlockConditionType, unlock_condition_config: '' });
     setUnlockConfig({});
   };
 
@@ -210,7 +191,7 @@ export default function NodeForm({
           </label>
           <select
             value={form.node_type}
-            onChange={(e) => setForm({ ...form, node_type: e.target.value })}
+            onChange={(e) => setForm({ ...form, node_type: e.target.value as TrailMapNodeType })}
             className="input w-full"
           >
             <option value="entry_point">Entry Point</option>
@@ -238,7 +219,7 @@ export default function NodeForm({
                 name="layer"
                 value="narrative"
                 checked={form.layer === 'narrative'}
-                onChange={(e) => setForm({ ...form, layer: e.target.value })}
+                onChange={(e) => setForm({ ...form, layer: e.target.value as 'narrative' | 'physical' })}
                 className="text-arg-purple-500 focus:ring-arg-purple-500"
               />
               <span className="text-gray-300">Narrative</span>
@@ -249,7 +230,7 @@ export default function NodeForm({
                 name="layer"
                 value="physical"
                 checked={form.layer === 'physical'}
-                onChange={(e) => setForm({ ...form, layer: e.target.value })}
+                onChange={(e) => setForm({ ...form, layer: e.target.value as 'narrative' | 'physical' })}
                 className="text-arg-purple-500 focus:ring-arg-purple-500"
               />
               <span className="text-gray-300">Physical</span>

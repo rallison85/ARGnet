@@ -8,7 +8,7 @@ import {
   LinkIcon,
 } from '@heroicons/react/24/outline';
 import { cn } from '../../../lib/utils';
-import { TrailMapNode, TrailMapEdge, TrailMapNodeType, TrailMapEdgeType } from '../TrailMapCanvas';
+import { TrailMapNode, TrailMapEdge, TrailMapNodeType, TrailMapEdgeType } from '../types/trail';
 
 interface TrailSidebarProps {
   isOpen: boolean;

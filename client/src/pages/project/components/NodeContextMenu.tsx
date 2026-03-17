@@ -6,15 +6,7 @@ import {
   EyeIcon,
 } from '@heroicons/react/24/outline';
 import { cn } from '../../../lib/utils';
-
-interface TrailMapNode {
-  id: string;
-  name: string;
-  node_type: string;
-  content_type?: string;
-  content_id?: string;
-  is_unlocked?: number;
-}
+import { TrailMapNode } from '../types/trail';
 
 interface NodeContextMenuProps {
   node: TrailMapNode;

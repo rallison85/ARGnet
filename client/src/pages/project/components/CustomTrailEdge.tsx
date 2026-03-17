@@ -5,14 +5,7 @@ import {
   EdgeLabelRenderer,
   BaseEdge,
 } from 'reactflow';
-
-export type TrailMapEdgeType =
-  | 'automatic'
-  | 'choice'
-  | 'puzzle'
-  | 'time'
-  | 'manual'
-  | 'conditional';
+import { TrailMapEdgeType } from '../types/trail';
 
 export interface CustomEdgeData {
   edge_type: TrailMapEdgeType;

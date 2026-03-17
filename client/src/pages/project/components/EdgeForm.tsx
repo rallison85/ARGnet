@@ -2,28 +2,9 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { puzzleApi } from '../../../lib/api';
 import toast from 'react-hot-toast';
+import { TrailMapEdge, TrailMapEdgeType } from '../types/trail';
 
-export type TrailMapEdgeType =
-  | 'automatic'
-  | 'choice'
-  | 'puzzle'
-  | 'time'
-  | 'manual'
-  | 'conditional';
-
-export interface TrailMapEdge {
-  id: string;
-  project_id: string;
-  source_node_id: string;
-  target_node_id: string;
-  edge_type: TrailMapEdgeType;
-  condition_config: string | null;
-  is_bidirectional: number;
-  label: string | null;
-  is_active: number;
-  created_at: string;
-  updated_at: string;
-}
+export type { TrailMapEdge } from '../types/trail';
 
 interface EdgeFormProps {
   edge?: TrailMapEdge;

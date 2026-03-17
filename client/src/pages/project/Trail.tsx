@@ -10,55 +10,14 @@ import Modal from './components/Modal';
 import ConfirmDialog from './components/ConfirmDialog';
 import NodeForm from './components/NodeForm';
 import NodeContextMenu from './components/NodeContextMenu';
-import EdgeForm, { TrailMapEdge } from './components/EdgeForm';
+import EdgeForm from './components/EdgeForm';
 import EdgeContextMenu from './components/EdgeContextMenu';
-import TrailMapCanvas, { TrailMapNode, TrailMapEdge as CanvasEdge } from './TrailMapCanvas';
+import TrailMapCanvas from './TrailMapCanvas';
 import LayerToggle, { LayerOption } from './components/LayerToggle';
 import TrailToolbar from './components/TrailToolbar';
 import TrailSidebar from './components/TrailSidebar';
 import ValidationResultsModal, { ValidationResult } from './components/ValidationResultsModal';
-
-interface TrailNode {
-  id: string;
-  name: string;
-  node_type: string;
-  description?: string;
-  position_x: number;
-  position_y: number;
-  layer: string;
-  content_type?: string;
-  content_id?: string;
-  unlock_condition_type?: string;
-  unlock_condition_config?: string;
-  completion_condition_type?: string;
-  completion_condition_config?: string;
-  estimated_duration_minutes?: number | null;
-  is_required?: number;
-  visibility?: string;
-  is_unlocked?: number;
-}
-
-type TrailMapEdgeType =
-  | 'automatic'
-  | 'choice'
-  | 'puzzle'
-  | 'time'
-  | 'manual'
-  | 'conditional';
-
-interface TrailEdge {
-  id: string;
-  project_id: string;
-  source_node_id: string;
-  target_node_id: string;
-  edge_type: TrailMapEdgeType;
-  condition_config: string | null;
-  is_bidirectional: number;
-  label: string | null;
-  is_active: number;
-  created_at: string;
-  updated_at: string;
-}
+import { TrailMapNode, TrailMapEdge } from './types/trail';
 
 export default function ProjectTrail() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -77,21 +36,21 @@ export default function ProjectTrail() {
 
   // Node modal state
   const [isCreatingNode, setIsCreatingNode] = useState(false);
-  const [editingNode, setEditingNode] = useState<TrailNode | null>(null);
+  const [editingNode, setEditingNode] = useState<TrailMapNode | null>(null);
   const [nodeToDelete, setNodeToDelete] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeContextMenu, setNodeContextMenu] = useState<{
-    node: TrailNode;
+    node: TrailMapNode;
     x: number;
     y: number;
   } | null>(null);
 
   // Edge modal state
-  const [editingEdge, setEditingEdge] = useState<TrailEdge | null>(null);
+  const [editingEdge, setEditingEdge] = useState<TrailMapEdge | null>(null);
   const [edgeToDelete, setEdgeToDelete] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [edgeContextMenu, setEdgeContextMenu] = useState<{
-    edge: TrailEdge;
+    edge: TrailMapEdge;
     x: number;
     y: number;
   } | null>(null);
@@ -107,7 +66,7 @@ export default function ProjectTrail() {
 
   // Node mutations
   const createNodeMutation = useMutation({
-    mutationFn: (data: Partial<TrailNode>) => trailApi.createNode(projectId!, data),
+    mutationFn: (data: Partial<TrailMapNode>) => trailApi.createNode(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
       setIsCreatingNode(false);
@@ -119,7 +78,7 @@ export default function ProjectTrail() {
   });
 
   const updateNodeMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<TrailNode> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<TrailMapNode> }) =>
       trailApi.updateNode(projectId!, id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trail', projectId] });
@@ -145,16 +104,10 @@ export default function ProjectTrail() {
   });
 
   const updatePositionsMutation = useMutation({
-    mutationFn: (nodes: { id: string; position_x: number; position_y: number }[]) => {
-      console.log('Saving positions:', JSON.stringify(nodes));
-      return trailApi.updatePositions(projectId!, nodes);
-    },
-    onSuccess: () => {
-      console.log('Positions saved successfully');
-    },
+    mutationFn: (nodes: { id: string; position_x: number; position_y: number }[]) =>
+      trailApi.updatePositions(projectId!, nodes),
     onError: (error: any) => {
       const errorMsg = error?.response?.data?.error || error?.response?.data?.errors || error.message;
-      console.error('Position save failed:', errorMsg, error?.response?.data);
       toast.error(`Failed to save: ${JSON.stringify(errorMsg)}`);
     },
   });
@@ -252,7 +205,7 @@ export default function ProjectTrail() {
 
       // Circular paths - convert IDs to human-readable names
       const allNodes = trailData?.nodes || [];
-      const nodeNameMap = new Map(allNodes.map((n: TrailNode) => [n.id, n.name]));
+      const nodeNameMap = new Map(allNodes.map((n: TrailMapNode) => [n.id, n.name]));
 
       backendData.issues.circularPaths.forEach((path) => {
         const readablePath = path.map((id) => nodeNameMap.get(id) || 'Unknown');
@@ -266,7 +219,7 @@ export default function ProjectTrail() {
         });
       });
 
-      const allEdges = trailData?.edges || trailData?.connections || [];
+      const allEdges = trailData?.edges || [];
 
       const result: ValidationResult = {
         isValid: backendData.valid,
@@ -274,8 +227,8 @@ export default function ProjectTrail() {
         stats: {
           totalNodes: allNodes.length,
           totalEdges: allEdges.length,
-          entryPoints: allNodes.filter((n: TrailNode) => n.node_type === 'entry_point').length,
-          finales: allNodes.filter((n: TrailNode) => n.node_type === 'finale').length,
+          entryPoints: allNodes.filter((n: TrailMapNode) => n.node_type === 'entry_point').length,
+          finales: allNodes.filter((n: TrailMapNode) => n.node_type === 'finale').length,
           orphanCount: backendData.issues.orphanNodes.length,
           unreachableCount: backendData.issues.unreachableNodes.length,
         },
@@ -296,14 +249,14 @@ export default function ProjectTrail() {
   }, []);
 
   const handleNodeDoubleClick = useCallback((node: TrailMapNode) => {
-    const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
+    const trailNode = trailData?.nodes.find((n: TrailMapNode) => n.id === node.id);
     if (trailNode) {
       setEditingNode(trailNode);
     }
   }, [trailData]);
 
   const handleNodeContextMenu = useCallback((node: TrailMapNode, event: React.MouseEvent) => {
-    const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
+    const trailNode = trailData?.nodes.find((n: TrailMapNode) => n.id === node.id);
     if (trailNode) {
       setNodeContextMenu({
         node: trailNode,
@@ -315,7 +268,7 @@ export default function ProjectTrail() {
 
   const handleNodePositionChange = useCallback((nodeId: string, x: number, y: number) => {
     updatePositionsMutation.mutate([{ id: nodeId, position_x: x, position_y: y }]);
-  }, [updatePositionsMutation]);
+  }, [updatePositionsMutation.mutate]);
 
   // Edge handlers
   const handleEdgeCreate = useCallback((sourceId: string, targetId: string) => {
@@ -323,12 +276,12 @@ export default function ProjectTrail() {
     setPendingConnection({ sourceId, targetId });
   }, []);
 
-  const handleEdgeClick = useCallback((edge: TrailEdge) => {
+  const handleEdgeClick = useCallback((edge: TrailMapEdge) => {
     setSelectedEdgeId(edge.id);
     setSelectedNodeId(null);
   }, []);
 
-  const handleEdgeContextMenu = useCallback((edge: TrailEdge, event: React.MouseEvent) => {
+  const handleEdgeContextMenu = useCallback((edge: TrailMapEdge, event: React.MouseEvent) => {
     setEdgeContextMenu({
       edge,
       x: event.clientX,
@@ -336,7 +289,7 @@ export default function ProjectTrail() {
     });
   }, []);
 
-  const handleEdgeReverse = useCallback((edge: TrailEdge) => {
+  const handleEdgeReverse = useCallback((edge: TrailMapEdge) => {
     updateEdgeMutation.mutate({
       id: edge.id,
       data: {
@@ -344,12 +297,12 @@ export default function ProjectTrail() {
         target_node_id: edge.source_node_id,
       },
     });
-  }, [updateEdgeMutation]);
+  }, [updateEdgeMutation.mutate]);
 
   // Direct edge delete (for keyboard delete, no confirmation)
   const handleEdgeDeleteDirect = useCallback((edgeId: string) => {
     deleteEdgeMutation.mutate(edgeId);
-  }, [deleteEdgeMutation]);
+  }, [deleteEdgeMutation.mutate]);
 
   // Stable callback for TrailMapCanvas fitView registration
   const handleFitViewReady = useCallback((fn: () => void) => {
@@ -365,7 +318,7 @@ export default function ProjectTrail() {
 
   const handleValidate = useCallback(() => {
     validateMutation.mutate();
-  }, [validateMutation]);
+  }, [validateMutation.mutate]);
 
   const handleHighlightNode = useCallback((nodeId: string) => {
     setSelectedNodeId(nodeId);
@@ -376,7 +329,7 @@ export default function ProjectTrail() {
 
   // Sidebar handlers
   const handleSidebarEditNode = useCallback((node: TrailMapNode) => {
-    const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
+    const trailNode = trailData?.nodes.find((n: TrailMapNode) => n.id === node.id);
     if (trailNode) {
       setEditingNode(trailNode);
     }
@@ -386,9 +339,9 @@ export default function ProjectTrail() {
     setNodeToDelete(nodeId);
   }, []);
 
-  const handleSidebarEditEdge = useCallback((edge: CanvasEdge) => {
-    const allEdges = trailData?.edges || trailData?.connections || [];
-    const trailEdge = allEdges.find((e: TrailEdge) => e.id === edge.id);
+  const handleSidebarEditEdge = useCallback((edge: TrailMapEdge) => {
+    const allEdges = trailData?.edges || [];
+    const trailEdge = allEdges.find((e: TrailMapEdge) => e.id === edge.id);
     if (trailEdge) {
       setEditingEdge(trailEdge);
     }
@@ -397,6 +350,33 @@ export default function ProjectTrail() {
   const handleSidebarDeleteEdge = useCallback((edgeId: string) => {
     setEdgeToDelete(edgeId);
   }, []);
+
+  // Build highlighted nodes map and validation node IDs from validation results
+  const { highlightedNodesMap, validationNodeIds } = useMemo(() => {
+    const map = new Map<string, 'unreachable' | 'orphan' | 'circular'>();
+    const nodeIdSet = new Set<string>();
+
+    if (validationResults && (highlightIssues || selectedLayer === 'validation')) {
+      validationResults.issues.forEach((issue) => {
+        if (issue.issueType === 'unreachable' || issue.issueType === 'orphan') {
+          if (issue.nodeId) {
+            map.set(issue.nodeId, issue.issueType);
+            nodeIdSet.add(issue.nodeId);
+          }
+        } else if (issue.issueType === 'circular' && issue.nodeIds) {
+          issue.nodeIds.forEach((id) => {
+            // Don't overwrite more severe issues
+            if (!map.has(id)) {
+              map.set(id, 'circular');
+            }
+            nodeIdSet.add(id);
+          });
+        }
+      });
+    }
+
+    return { highlightedNodesMap: map, validationNodeIds: Array.from(nodeIdSet) };
+  }, [validationResults, highlightIssues, selectedLayer]);
 
   const addNode = () => {
     setIsCreatingNode(true);
@@ -412,14 +392,14 @@ export default function ProjectTrail() {
 
   // Prepare nodes and edges for TrailMapCanvas
   const nodes = trailData?.nodes || [];
-  const edges = trailData?.edges || trailData?.connections || [];
+  const edges = trailData?.edges || [];
 
   // Get selected node/edge objects for sidebar
   const selectedNode = selectedNodeId
-    ? (nodes.find((n: TrailNode) => n.id === selectedNodeId) as TrailMapNode | undefined) || null
+    ? (nodes.find((n: TrailMapNode) => n.id === selectedNodeId) as TrailMapNode | undefined) || null
     : null;
   const selectedEdge = selectedEdgeId
-    ? (edges.find((e: TrailEdge) => e.id === selectedEdgeId) as CanvasEdge | undefined) || null
+    ? (edges.find((e: TrailMapEdge) => e.id === selectedEdgeId) as TrailMapEdge | undefined) || null
     : null;
 
   // Calculate a smart default position for new nodes (offset from existing nodes)
@@ -428,39 +408,10 @@ export default function ProjectTrail() {
       return { x: 250, y: 100 };
     }
     // Find the rightmost node and place new node to its right
-    const maxX = Math.max(...nodes.map((n: TrailNode) => n.position_x || 0));
-    const avgY = nodes.reduce((sum: number, n: TrailNode) => sum + (n.position_y || 0), 0) / nodes.length;
+    const maxX = Math.max(...nodes.map((n: TrailMapNode) => n.position_x || 0));
+    const avgY = nodes.reduce((sum: number, n: TrailMapNode) => sum + (n.position_y || 0), 0) / nodes.length;
     return { x: maxX + 250, y: avgY };
   };
-
-  // Build highlighted nodes map and validation node IDs from validation results
-  const { highlightedNodesMap, validationNodeIds } = useMemo(() => {
-    const map = new Map<string, 'unreachable' | 'orphan' | 'circular'>();
-    const nodeIds: string[] = [];
-
-    if (validationResults && (highlightIssues || selectedLayer === 'validation')) {
-      validationResults.issues.forEach((issue) => {
-        if (issue.issueType === 'unreachable' || issue.issueType === 'orphan') {
-          if (issue.nodeId) {
-            map.set(issue.nodeId, issue.issueType);
-            nodeIds.push(issue.nodeId);
-          }
-        } else if (issue.issueType === 'circular' && issue.nodeIds) {
-          issue.nodeIds.forEach((id) => {
-            // Don't overwrite more severe issues
-            if (!map.has(id)) {
-              map.set(id, 'circular');
-            }
-            if (!nodeIds.includes(id)) {
-              nodeIds.push(id);
-            }
-          });
-        }
-      });
-    }
-
-    return { highlightedNodesMap: map, validationNodeIds: nodeIds };
-  }, [validationResults, highlightIssues, selectedLayer]);
 
   // Check if any mutations are pending (for save indicator)
   const isSaving =
@@ -544,7 +495,7 @@ export default function ProjectTrail() {
           selectedNode={selectedNode}
           selectedEdge={selectedEdge}
           nodes={nodes as TrailMapNode[]}
-          edges={edges as CanvasEdge[]}
+          edges={edges as TrailMapEdge[]}
           onEditNode={handleSidebarEditNode}
           onDeleteNode={handleSidebarDeleteNode}
           onEditEdge={handleSidebarEditEdge}

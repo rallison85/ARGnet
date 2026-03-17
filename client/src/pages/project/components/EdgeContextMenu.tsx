@@ -4,14 +4,7 @@ import {
   ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline';
 import { cn } from '../../../lib/utils';
-
-interface TrailMapEdge {
-  id: string;
-  source_node_id: string;
-  target_node_id: string;
-  edge_type: string;
-  label: string | null;
-}
+import { TrailMapEdge } from '../types/trail';
 
 interface EdgeContextMenuProps {
   edge: TrailMapEdge;

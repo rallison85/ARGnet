@@ -110,12 +110,6 @@ export const trailApi = {
     api.delete(`/projects/${projectId}/trails/nodes/${nodeId}`),
   updatePositions: (projectId: string, nodes: { id: string; position_x: number; position_y: number }[]) =>
     api.patch(`/projects/${projectId}/trails/nodes/positions`, { nodes }),
-  createConnection: (projectId: string, data: unknown) =>
-    api.post(`/projects/${projectId}/trails/connections`, data),
-  updateConnection: (projectId: string, connectionId: string, data: unknown) =>
-    api.patch(`/projects/${projectId}/trails/connections/${connectionId}`, data),
-  deleteConnection: (projectId: string, connectionId: string) =>
-    api.delete(`/projects/${projectId}/trails/connections/${connectionId}`),
   // Edge CRUD methods
   createEdge: (projectId: string, data: unknown) =>
     api.post(`/projects/${projectId}/trails/edges`, data),
