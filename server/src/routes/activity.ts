@@ -55,7 +55,7 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
   res.json({
     activities: (activities as Record<string, unknown>[]).map(a => ({
       ...a,
-      changes: (a as { changes: string | null }).changes ? JSON.parse((a as { changes: string }).changes) : null
+      changes: a.changes ? JSON.parse(a.changes as string) : null
     })),
     total: count,
     limit,
@@ -127,7 +127,7 @@ router.get('/summary', authenticate, requireProjectAccess('viewer'), (req: AuthR
     activeUsers,
     recentActivity: (recentActivity as Record<string, unknown>[]).map(a => ({
       ...a,
-      changes: (a as { changes: string | null }).changes ? JSON.parse((a as { changes: string }).changes) : null
+      changes: a.changes ? JSON.parse(a.changes as string) : null
     }))
   });
 });

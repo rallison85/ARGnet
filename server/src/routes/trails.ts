@@ -444,6 +444,20 @@ router.patch('/edges/:edgeId', authenticate, requireProjectAccess('contributor')
     return;
   }
 
+  // Prevent self-loop if source/target are being changed
+  if (req.body.source_node_id || req.body.target_node_id) {
+    const existingEdge = db.prepare('SELECT source_node_id, target_node_id FROM trail_map_edges WHERE id = ? AND project_id = ?')
+      .get(req.params.edgeId, req.params.projectId) as { source_node_id: string; target_node_id: string } | undefined;
+    if (existingEdge) {
+      const effectiveSource = req.body.source_node_id || existingEdge.source_node_id;
+      const effectiveTarget = req.body.target_node_id || existingEdge.target_node_id;
+      if (effectiveSource === effectiveTarget) {
+        res.status(400).json({ error: 'Self-loop edges are not allowed (source and target must differ)' });
+        return;
+      }
+    }
+  }
+
   const updates: string[] = [];
   const values: (string | number | null)[] = [];
 
