@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { Outlet, Link, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { ErrorBoundary } from 'react-error-boundary';
 import { projectApi } from '../lib/api';
 import { connectSocket, disconnectSocket, joinProject, leaveProject } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
+import { ProjectErrorFallback } from '../components/ErrorFallback';
 import clsx from 'clsx';
 import {
   HomeIcon,
@@ -209,7 +211,12 @@ export default function ProjectLayout() {
       {/* Main content */}
       <main className="flex-1 overflow-auto">
         <div className="p-8">
-          <Outlet context={{ project }} />
+          <ErrorBoundary
+            FallbackComponent={ProjectErrorFallback}
+            onReset={() => window.location.reload()}
+          >
+            <Outlet context={{ project }} />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

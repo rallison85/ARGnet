@@ -18,7 +18,7 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
       u.username as created_by_username,
       u.display_name as created_by_name
     FROM digital_properties dp
-    LEFT JOIN characters c ON c.id = dp.owner_character_id
+    LEFT JOIN characters c ON c.id = dp.character_id
     LEFT JOIN users u ON u.id = dp.created_by
     WHERE dp.project_id = ?
   `;
@@ -72,7 +72,7 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
   db.prepare(`
     INSERT INTO digital_properties (
       id, project_id, name, property_type, url, platform, username, description,
-      purpose, content_guidelines, posting_schedule, credentials, owner_character_id,
+      purpose, content_guidelines, posting_schedule, credentials, character_id,
       status, launch_date, created_by
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -90,7 +90,7 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
     posting_schedule || null,
     credentials ? JSON.stringify(credentials) : null,
     owner_character_id || null,
-    status || 'planned',
+    status || 'planning',
     launch_date || null,
     req.user!.id
   );
@@ -113,7 +113,7 @@ router.get('/:propertyId', authenticate, requireProjectAccess('viewer'), (req: A
       u.username as created_by_username,
       u.display_name as created_by_name
     FROM digital_properties dp
-    LEFT JOIN characters c ON c.id = dp.owner_character_id
+    LEFT JOIN characters c ON c.id = dp.character_id
     LEFT JOIN users u ON u.id = dp.created_by
     WHERE dp.id = ? AND dp.project_id = ?
   `).get(req.params.propertyId, req.params.projectId) as Record<string, unknown> | undefined;
@@ -137,7 +137,7 @@ router.get('/:propertyId', authenticate, requireProjectAccess('viewer'), (req: A
 router.patch('/:propertyId', authenticate, requireProjectAccess('contributor'), (req: AuthRequest, res: Response) => {
   const allowedFields = [
     'name', 'property_type', 'url', 'platform', 'username', 'description',
-    'purpose', 'content_guidelines', 'posting_schedule', 'owner_character_id',
+    'purpose', 'content_guidelines', 'posting_schedule', 'character_id',
     'status', 'launch_date'
   ];
 

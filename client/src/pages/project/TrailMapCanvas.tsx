@@ -1,4 +1,4 @@
-import { useCallback, useEffect, memo, useRef } from 'react';
+import { useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -125,7 +125,13 @@ interface TrailMapCanvasProps {
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
   readOnly?: boolean;
+  onFitViewReady?: (fitViewFn: () => void) => void;
+  layerFilter?: 'narrative' | 'physical' | 'both' | 'validation';
+  highlightedNodes?: Map<string, 'unreachable' | 'orphan' | 'circular'>;
+  validationNodeIds?: string[];
 }
+
+export type ValidationIssueType = 'unreachable' | 'orphan' | 'circular' | null;
 
 interface CustomNodeData {
   originalNode: TrailMapNode;
@@ -135,6 +141,7 @@ interface CustomNodeData {
   content_type: string | null;
   isLocked: boolean;
   is_required: boolean;
+  highlightType: ValidationIssueType;
 }
 
 // ============================================================================
@@ -235,9 +242,13 @@ const CustomTrailNode = memo(({ data, selected }: NodeProps<CustomNodeData>) => 
           'transition-all duration-200',
           'hover:shadow-xl hover:scale-105 cursor-pointer',
           getNodeBorderColor(data.node_type),
-          selected && 'ring-2 ring-arg-purple-500'
+          selected && 'ring-2 ring-arg-purple-500',
+          // Validation issue highlights with different colors
+          data.highlightType === 'unreachable' && 'ring-2 ring-red-500 animate-pulse shadow-red-500/50 shadow-lg',
+          data.highlightType === 'orphan' && 'ring-2 ring-orange-500 animate-pulse shadow-orange-500/50 shadow-lg',
+          data.highlightType === 'circular' && 'ring-2 ring-yellow-500 animate-pulse shadow-yellow-500/50 shadow-lg'
         )}
-        title={`${data.name} (${data.node_type})`}
+        title={`${data.name} (${data.node_type})${data.highlightType ? ` - ${data.highlightType} issue` : ''}`}
       >
         {/* Header with icon and name */}
         <div className="flex items-center gap-2 mb-2">
@@ -284,6 +295,22 @@ const CustomTrailNode = memo(({ data, selected }: NodeProps<CustomNodeData>) => 
                 Required
               </div>
             )}
+          </div>
+        )}
+
+        {/* Validation issue badge */}
+        {data.highlightType && (
+          <div
+            className={cn(
+              'mt-2 px-2 py-1 rounded text-xs font-medium text-center',
+              data.highlightType === 'unreachable' && 'bg-red-500/30 text-red-300 border border-red-500/50',
+              data.highlightType === 'orphan' && 'bg-orange-500/30 text-orange-300 border border-orange-500/50',
+              data.highlightType === 'circular' && 'bg-yellow-500/30 text-yellow-300 border border-yellow-500/50'
+            )}
+          >
+            {data.highlightType === 'unreachable' && 'Unreachable'}
+            {data.highlightType === 'orphan' && 'Orphan Node'}
+            {data.highlightType === 'circular' && 'Circular Path'}
           </div>
         )}
       </div>
@@ -335,50 +362,71 @@ function TrailMapCanvasInner({
   selectedNodeId,
   selectedEdgeId,
   readOnly = false,
+  onFitViewReady,
+  layerFilter = 'both',
+  highlightedNodes = new Map(),
+  validationNodeIds = [],
 }: TrailMapCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { fitView } = useReactFlow();
   const hasInitialFit = useRef(false);
 
+  // Expose fitView function to parent
+  useEffect(() => {
+    if (onFitViewReady) {
+      onFitViewReady(() => fitView({ padding: 0.2, maxZoom: 1 }));
+    }
+  }, [fitView, onFitViewReady]);
+
+  // Memoize validation node set for efficient lookup
+  const validationNodeSet = useMemo(() => new Set(validationNodeIds), [validationNodeIds]);
+
+  // Memoize filtered nodes by layer
+  const filteredTrailNodes = useMemo(() => {
+    if (layerFilter === 'both') {
+      return trailNodes;
+    }
+    if (layerFilter === 'validation') {
+      // Show only nodes with validation issues
+      return trailNodes.filter((node) => validationNodeSet.has(node.id));
+    }
+    return trailNodes.filter((node) => node.layer === layerFilter);
+  }, [trailNodes, layerFilter, validationNodeSet]);
+
+  // Memoize filtered edges (only include edges connecting visible nodes)
+  const filteredTrailEdges = useMemo(() => {
+    const visibleNodeIds = new Set(filteredTrailNodes.map((n) => n.id));
+    return trailEdges.filter(
+      (edge) => visibleNodeIds.has(edge.source_node_id) && visibleNodeIds.has(edge.target_node_id)
+    );
+  }, [trailEdges, filteredTrailNodes]);
+
   // ============================================================================
   // DATA TRANSFORMATION
   // ============================================================================
 
-  // Transform trail nodes to ReactFlow nodes (only when trail data changes)
-  // Preserve local positions if they exist (to handle race conditions with position saves)
+  // Transform trail nodes to ReactFlow nodes
+  // When layer filter or highlights change, we need to rebuild the node list
   useEffect(() => {
-    setNodes((currentNodes) => {
-      // Build a map of current local positions
-      const currentPositions = new Map<string, { x: number; y: number }>();
-      currentNodes.forEach((node) => {
-        currentPositions.set(node.id, node.position);
-      });
-
-      return trailNodes.map((node) => {
-        // Use local position if it exists (node was moved but DB not yet updated)
-        // Otherwise use the database position
-        const localPos = currentPositions.get(node.id);
-        const position = localPos || { x: node.position_x, y: node.position_y };
-
-        return {
-          id: node.id,
-          type: 'trailNode',
-          position,
-          data: {
-            originalNode: node,
-            name: node.name,
-            node_type: node.node_type,
-            hasContent: !!(node.content_type && node.content_id),
-            content_type: node.content_type,
-            isLocked: node.unlock_condition_type !== 'always',
-            is_required: node.is_required === 1,
-          },
-          selected: false,
-        };
-      });
-    });
-  }, [trailNodes, setNodes]);
+    const newNodes = filteredTrailNodes.map((node) => ({
+      id: node.id,
+      type: 'trailNode',
+      position: { x: node.position_x, y: node.position_y },
+      data: {
+        originalNode: node,
+        name: node.name,
+        node_type: node.node_type,
+        hasContent: !!(node.content_type && node.content_id),
+        content_type: node.content_type,
+        isLocked: node.unlock_condition_type !== 'always',
+        is_required: node.is_required === 1,
+        highlightType: highlightedNodes.get(node.id) || null,
+      },
+      selected: false,
+    }));
+    setNodes(newNodes);
+  }, [filteredTrailNodes, setNodes, highlightedNodes]);
 
   // Handle node selection separately (without resetting positions)
   useEffect(() => {
@@ -392,7 +440,7 @@ function TrailMapCanvasInner({
 
   // Transform trail edges to ReactFlow edges (only when trail data changes)
   useEffect(() => {
-    const flowEdges: Edge<CustomEdgeData>[] = trailEdges.map((edge) => {
+    const flowEdges: Edge<CustomEdgeData>[] = filteredTrailEdges.map((edge) => {
       // Get edge color for marker
       const colorMap: Record<TrailMapEdgeType, string> = {
         automatic: '#6b7280',
@@ -426,7 +474,7 @@ function TrailMapCanvasInner({
       };
     });
     setEdges(flowEdges);
-  }, [trailEdges, setEdges]);
+  }, [filteredTrailEdges, setEdges]);
 
   // Handle edge selection separately
   useEffect(() => {
@@ -440,7 +488,7 @@ function TrailMapCanvasInner({
 
   // Fit view only once on initial load
   useEffect(() => {
-    if (!hasInitialFit.current && trailNodes.length > 0) {
+    if (!hasInitialFit.current && filteredTrailNodes.length > 0) {
       // Small delay to ensure nodes are rendered
       const timer = setTimeout(() => {
         fitView({ padding: 0.2, maxZoom: 1 });
@@ -448,7 +496,7 @@ function TrailMapCanvasInner({
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [trailNodes.length, fitView]);
+  }, [filteredTrailNodes.length, fitView]);
 
   // ============================================================================
   // EVENT HANDLERS

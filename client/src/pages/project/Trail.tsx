@@ -1,16 +1,22 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ErrorBoundary } from 'react-error-boundary';
 import { trailApi } from '../../lib/api';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, Bars3BottomRightIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { CanvasErrorFallback } from '../../components/ErrorFallback';
 import Modal from './components/Modal';
 import ConfirmDialog from './components/ConfirmDialog';
 import NodeForm from './components/NodeForm';
 import NodeContextMenu from './components/NodeContextMenu';
 import EdgeForm, { TrailMapEdge } from './components/EdgeForm';
 import EdgeContextMenu from './components/EdgeContextMenu';
-import TrailMapCanvas, { TrailMapNode } from './TrailMapCanvas';
+import TrailMapCanvas, { TrailMapNode, TrailMapEdge as CanvasEdge } from './TrailMapCanvas';
+import LayerToggle, { LayerOption } from './components/LayerToggle';
+import TrailToolbar from './components/TrailToolbar';
+import TrailSidebar from './components/TrailSidebar';
+import ValidationResultsModal, { ValidationResult } from './components/ValidationResultsModal';
 
 interface TrailNode {
   id: string;
@@ -57,6 +63,17 @@ interface TrailEdge {
 export default function ProjectTrail() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
+  const fitViewFnRef = useRef<(() => void) | null>(null);
+
+  // Layer and toolbar state
+  const [selectedLayer, setSelectedLayer] = useState<LayerOption>('both');
+  const [connectMode, setConnectMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Validation state
+  const [validationResults, setValidationResults] = useState<ValidationResult | null>(null);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [highlightIssues, setHighlightIssues] = useState(false);
 
   // Node modal state
   const [isCreatingNode, setIsCreatingNode] = useState(false);
@@ -182,6 +199,96 @@ export default function ProjectTrail() {
     },
   });
 
+  // Validation mutation
+  const validateMutation = useMutation({
+    mutationFn: () => trailApi.validate(projectId!),
+    onSuccess: (response) => {
+      // Transform backend response to frontend format
+      const backendData = response.data as {
+        valid: boolean;
+        issues: {
+          orphanNodes: Array<{ id: string; name: string }>;
+          unreachableNodes: Array<{ id: string; name: string }>;
+          missingEntryPoint: boolean;
+          circularPaths: string[][];
+        };
+      };
+
+      const transformedIssues: ValidationResult['issues'] = [];
+
+      // Missing entry point
+      if (backendData.issues.missingEntryPoint) {
+        transformedIssues.push({
+          type: 'warning',
+          category: 'entry_point',
+          issueType: 'entry_point',
+          message: 'No entry point defined. Players need a starting node.',
+        });
+      }
+
+      // Orphan nodes
+      backendData.issues.orphanNodes.forEach((node) => {
+        transformedIssues.push({
+          type: 'warning',
+          category: 'orphan_nodes',
+          issueType: 'orphan',
+          message: `"${node.name}" has no connections`,
+          nodeId: node.id,
+          nodeName: node.name,
+        });
+      });
+
+      // Unreachable nodes
+      backendData.issues.unreachableNodes.forEach((node) => {
+        transformedIssues.push({
+          type: 'error',
+          category: 'unreachable_nodes',
+          issueType: 'unreachable',
+          message: `"${node.name}" cannot be reached from any entry point`,
+          nodeId: node.id,
+          nodeName: node.name,
+        });
+      });
+
+      // Circular paths - convert IDs to human-readable names
+      const allNodes = trailData?.nodes || [];
+      const nodeNameMap = new Map(allNodes.map((n: TrailNode) => [n.id, n.name]));
+
+      backendData.issues.circularPaths.forEach((path) => {
+        const readablePath = path.map((id) => nodeNameMap.get(id) || 'Unknown');
+        transformedIssues.push({
+          type: 'warning',
+          category: 'circular_paths',
+          issueType: 'circular',
+          message: `Circular path: ${readablePath.join(' → ')}`,
+          nodeIds: path, // Store all node IDs in the circular path
+          path,
+        });
+      });
+
+      const allEdges = trailData?.edges || trailData?.connections || [];
+
+      const result: ValidationResult = {
+        isValid: backendData.valid,
+        issues: transformedIssues,
+        stats: {
+          totalNodes: allNodes.length,
+          totalEdges: allEdges.length,
+          entryPoints: allNodes.filter((n: TrailNode) => n.node_type === 'entry_point').length,
+          finales: allNodes.filter((n: TrailNode) => n.node_type === 'finale').length,
+          orphanCount: backendData.issues.orphanNodes.length,
+          unreachableCount: backendData.issues.unreachableNodes.length,
+        },
+      };
+
+      setValidationResults(result);
+      setShowValidationModal(true);
+    },
+    onError: () => {
+      toast.error('Validation failed');
+    },
+  });
+
   // Node handlers
   const handleNodeClick = useCallback((node: TrailMapNode) => {
     setSelectedNodeId(node.id);
@@ -244,6 +351,48 @@ export default function ProjectTrail() {
     deleteEdgeMutation.mutate(edgeId);
   }, [deleteEdgeMutation]);
 
+  // Toolbar handlers
+  const handleFitView = useCallback(() => {
+    if (fitViewFnRef.current) {
+      fitViewFnRef.current();
+    }
+  }, []);
+
+  const handleValidate = useCallback(() => {
+    validateMutation.mutate();
+  }, [validateMutation]);
+
+  const handleHighlightNode = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setShowValidationModal(false);
+    // Optionally fit view to selected node
+    handleFitView();
+  }, [handleFitView]);
+
+  // Sidebar handlers
+  const handleSidebarEditNode = useCallback((node: TrailMapNode) => {
+    const trailNode = trailData?.nodes.find((n: TrailNode) => n.id === node.id);
+    if (trailNode) {
+      setEditingNode(trailNode);
+    }
+  }, [trailData]);
+
+  const handleSidebarDeleteNode = useCallback((nodeId: string) => {
+    setNodeToDelete(nodeId);
+  }, []);
+
+  const handleSidebarEditEdge = useCallback((edge: CanvasEdge) => {
+    const allEdges = trailData?.edges || trailData?.connections || [];
+    const trailEdge = allEdges.find((e: TrailEdge) => e.id === edge.id);
+    if (trailEdge) {
+      setEditingEdge(trailEdge);
+    }
+  }, [trailData]);
+
+  const handleSidebarDeleteEdge = useCallback((edgeId: string) => {
+    setEdgeToDelete(edgeId);
+  }, []);
+
   const addNode = () => {
     setIsCreatingNode(true);
   };
@@ -260,6 +409,14 @@ export default function ProjectTrail() {
   const nodes = trailData?.nodes || [];
   const edges = trailData?.edges || trailData?.connections || [];
 
+  // Get selected node/edge objects for sidebar
+  const selectedNode = selectedNodeId
+    ? (nodes.find((n: TrailNode) => n.id === selectedNodeId) as TrailMapNode | undefined) || null
+    : null;
+  const selectedEdge = selectedEdgeId
+    ? (edges.find((e: TrailEdge) => e.id === selectedEdgeId) as CanvasEdge | undefined) || null
+    : null;
+
   // Calculate a smart default position for new nodes (offset from existing nodes)
   const getDefaultNodePosition = () => {
     if (nodes.length === 0) {
@@ -271,38 +428,127 @@ export default function ProjectTrail() {
     return { x: maxX + 250, y: avgY };
   };
 
+  // Build highlighted nodes map and validation node IDs from validation results
+  const { highlightedNodesMap, validationNodeIds } = (() => {
+    const map = new Map<string, 'unreachable' | 'orphan' | 'circular'>();
+    const nodeIds: string[] = [];
+
+    if (validationResults && (highlightIssues || selectedLayer === 'validation')) {
+      validationResults.issues.forEach((issue) => {
+        if (issue.issueType === 'unreachable' || issue.issueType === 'orphan') {
+          if (issue.nodeId) {
+            map.set(issue.nodeId, issue.issueType);
+            nodeIds.push(issue.nodeId);
+          }
+        } else if (issue.issueType === 'circular' && issue.nodeIds) {
+          issue.nodeIds.forEach((id) => {
+            // Don't overwrite more severe issues
+            if (!map.has(id)) {
+              map.set(id, 'circular');
+            }
+            if (!nodeIds.includes(id)) {
+              nodeIds.push(id);
+            }
+          });
+        }
+      });
+    }
+
+    return { highlightedNodesMap: map, validationNodeIds: nodeIds };
+  })();
+
+  // Check if any mutations are pending (for save indicator)
+  const isSaving =
+    createNodeMutation.isPending ||
+    updateNodeMutation.isPending ||
+    deleteNodeMutation.isPending ||
+    updatePositionsMutation.isPending ||
+    createEdgeMutation.isPending ||
+    updateEdgeMutation.isPending ||
+    deleteEdgeMutation.isPending;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="page-header">Trail Map</h1>
-        <div className="flex items-center gap-2">
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <h1 className="page-header">Trail Map</h1>
+          <LayerToggle
+            selectedLayer={selectedLayer}
+            onLayerChange={setSelectedLayer}
+            hasValidationIssues={validationResults ? validationResults.issues.length > 0 : false}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <TrailToolbar
+            connectMode={connectMode}
+            onConnectModeToggle={() => setConnectMode(!connectMode)}
+            onFitView={handleFitView}
+            onValidate={handleValidate}
+            isSaving={isSaving}
+            isValidating={validateMutation.isPending}
+          />
           <button onClick={addNode} className="btn btn-primary flex items-center gap-2">
             <PlusIcon className="w-5 h-5" />
             Add Node
           </button>
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            <Bars3BottomRightIcon className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      <div className="card h-[calc(100vh-16rem)]">
-        <TrailMapCanvas
-          projectId={projectId!}
-          nodes={nodes}
-          edges={edges}
-          onNodeClick={handleNodeClick}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          onNodeContextMenu={handleNodeContextMenu}
-          onNodePositionChange={handleNodePositionChange}
-          onEdgeCreate={handleEdgeCreate}
-          onEdgeClick={handleEdgeClick}
-          onEdgeContextMenu={handleEdgeContextMenu}
-          onEdgeDelete={handleEdgeDeleteDirect}
-          selectedNodeId={selectedNodeId}
-          selectedEdgeId={selectedEdgeId}
+      {/* Main Content Area */}
+      <div className="flex flex-1 gap-4 min-h-0">
+        {/* Canvas */}
+        <div className="flex-1 card overflow-hidden">
+          <ErrorBoundary
+            FallbackComponent={CanvasErrorFallback}
+            onReset={() => queryClient.invalidateQueries({ queryKey: ['trail', projectId] })}
+          >
+            <TrailMapCanvas
+              projectId={projectId!}
+              nodes={nodes}
+              edges={edges}
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
+              onNodeContextMenu={handleNodeContextMenu}
+              onNodePositionChange={handleNodePositionChange}
+              onEdgeCreate={handleEdgeCreate}
+              onEdgeClick={handleEdgeClick}
+              onEdgeContextMenu={handleEdgeContextMenu}
+              onEdgeDelete={handleEdgeDeleteDirect}
+              selectedNodeId={selectedNodeId}
+              selectedEdgeId={selectedEdgeId}
+              onFitViewReady={(fn) => { fitViewFnRef.current = fn; }}
+              layerFilter={selectedLayer}
+              highlightedNodes={highlightedNodesMap}
+              validationNodeIds={validationNodeIds}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* Sidebar */}
+        <TrailSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          selectedNode={selectedNode}
+          selectedEdge={selectedEdge}
+          nodes={nodes as TrailMapNode[]}
+          edges={edges as CanvasEdge[]}
+          onEditNode={handleSidebarEditNode}
+          onDeleteNode={handleSidebarDeleteNode}
+          onEditEdge={handleSidebarEditEdge}
+          onDeleteEdge={handleSidebarDeleteEdge}
         />
       </div>
 
       {/* Legend */}
-      <div className="text-sm text-gray-400 space-y-2">
+      <div className="mt-4 text-sm text-gray-400 space-y-2">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="font-medium text-gray-300">Nodes:</span>
           <span className="flex items-center gap-1">
@@ -354,10 +600,20 @@ export default function ProjectTrail() {
             <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #22c55e 0, #22c55e 4px, transparent 4px, transparent 6px, #22c55e 6px, #22c55e 7px, transparent 7px, transparent 9px)' }} /> Manual
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #f97316 0, #f97316 2px, transparent 2px, transparent 4px, #f97316 4px, #f97316 6px, transparent 6px, transparent 10px)' }} /> Cond
+            <span className="w-6 h-0.5" style={{ background: 'repeating-linear-gradient(90deg, #f97316 0, #f97316 2px, transparent 2px, transparent 4px, #f97316 4px, #f97316 6px, transparent 6px, transparent 10px)' }} /> Conditional
           </span>
         </div>
       </div>
+
+      {/* Validation Results Modal */}
+      <ValidationResultsModal
+        isOpen={showValidationModal}
+        onClose={() => setShowValidationModal(false)}
+        result={validationResults}
+        onHighlightNode={handleHighlightNode}
+        highlightIssues={highlightIssues}
+        onToggleHighlight={setHighlightIssues}
+      />
 
       {/* Create Node Modal */}
       <Modal

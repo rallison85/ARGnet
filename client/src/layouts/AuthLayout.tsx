@@ -1,4 +1,6 @@
 import { Outlet, Link } from 'react-router-dom';
+import { ErrorBoundary } from 'react-error-boundary';
+import { AuthErrorFallback } from '../components/ErrorFallback';
 
 export default function AuthLayout() {
   return (
@@ -25,7 +27,12 @@ export default function AuthLayout() {
 
       {/* Auth form container */}
       <div className="w-full max-w-md z-10">
-        <Outlet />
+        <ErrorBoundary
+          FallbackComponent={AuthErrorFallback}
+          onReset={() => window.location.reload()}
+        >
+          <Outlet />
+        </ErrorBoundary>
       </div>
 
       {/* Footer */}

@@ -1,5 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { ErrorBoundary } from 'react-error-boundary';
 import { useAuthStore } from '../stores/authStore';
+import { ProjectErrorFallback } from '../components/ErrorFallback';
 import {
   HomeIcon,
   FolderIcon,
@@ -97,7 +99,12 @@ export default function MainLayout() {
       {/* Main content */}
       <main className="flex-1 overflow-auto">
         <div className="p-8">
-          <Outlet />
+          <ErrorBoundary
+            FallbackComponent={ProjectErrorFallback}
+            onReset={() => window.location.reload()}
+          >
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

@@ -23,7 +23,7 @@ export default function ProjectDigitalProperties() {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
 
-  const { data: properties, isLoading } = useQuery({
+  const { data: properties, isLoading, isError } = useQuery({
     queryKey: ['digital-properties', projectId],
     queryFn: () => digitalPropertyApi.list(projectId!).then(res => res.data),
   });
@@ -101,7 +101,16 @@ export default function ProjectDigitalProperties() {
             <div key={i} className="card p-4 animate-pulse h-32" />
           ))}
         </div>
-      ) : properties?.length === 0 ? (
+      ) : isError ? (
+        <div className="card p-12 text-center">
+          <DevicePhoneMobileIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-white mb-2">Failed to load digital properties</h3>
+          <p className="text-gray-400 mb-4">There was an error loading the data. Please try again.</p>
+          <button onClick={() => queryClient.invalidateQueries({ queryKey: ['digital-properties', projectId] })} className="btn btn-primary">
+            Retry
+          </button>
+        </div>
+      ) : !properties || properties.length === 0 ? (
         <div className="card p-12 text-center">
           <DevicePhoneMobileIcon className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-white mb-2">No digital properties yet</h3>

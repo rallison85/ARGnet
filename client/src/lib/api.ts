@@ -123,6 +123,7 @@ export const trailApi = {
     api.patch(`/projects/${projectId}/trails/edges/${edgeId}`, data),
   deleteEdge: (projectId: string, edgeId: string) =>
     api.delete(`/projects/${projectId}/trails/edges/${edgeId}`),
+  validate: (projectId: string) => api.get(`/projects/${projectId}/trails/validate`),
 };
 
 export const eventApi = {
