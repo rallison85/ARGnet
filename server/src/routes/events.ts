@@ -42,9 +42,9 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
 
   const events = db.prepare(query).all(...params);
 
-  res.json(events.map(e => ({
+  res.json((events as Record<string, unknown>[]).map(e => ({
     ...e,
-    staff_required: (e as { staff_required: string | null }).staff_required ? JSON.parse((e as { staff_required: string }).staff_required) : []
+    staff_required: e.staff_required ? JSON.parse(e.staff_required as string) : []
   })));
 });
 
@@ -98,10 +98,10 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
 
   logActivity(req.params.projectId, req.user!.id, 'created', 'event', eventId, title);
 
-  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId) as Record<string, unknown>;
   res.status(201).json({
     ...event,
-    staff_required: (event as { staff_required: string | null }).staff_required ? JSON.parse((event as { staff_required: string }).staff_required) : []
+    staff_required: event.staff_required ? JSON.parse(event.staff_required as string) : []
   });
 });
 
@@ -193,10 +193,10 @@ router.patch('/:eventId', authenticate, requireProjectAccess('contributor'), (re
 
   logActivity(req.params.projectId, req.user!.id, 'updated', 'event', req.params.eventId, req.body.title);
 
-  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.eventId);
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.eventId) as Record<string, unknown>;
   res.json({
     ...event,
-    staff_required: (event as { staff_required: string | null }).staff_required ? JSON.parse((event as { staff_required: string }).staff_required) : []
+    staff_required: event.staff_required ? JSON.parse(event.staff_required as string) : []
   });
 });
 

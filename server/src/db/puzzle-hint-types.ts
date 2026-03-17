@@ -90,14 +90,14 @@ export const PuzzleHintHelpers = {
   /**
    * Sort hints by order (ascending)
    */
-  sortByOrder(hints: PuzzleHint[] | PuzzleHintParsed[]): typeof hints {
+  sortByOrder<T extends PuzzleHint | PuzzleHintParsed>(hints: T[]): T[] {
     return [...hints].sort((a, b) => a.hint_order - b.hint_order);
   },
 
   /**
    * Get next unreleased hint for a puzzle
    */
-  getNextUnreleased(hints: (PuzzleHint | PuzzleHintParsed)[]): typeof hints[0] | null {
+  getNextUnreleased<T extends PuzzleHint | PuzzleHintParsed>(hints: T[]): T | null {
     const sorted = this.sortByOrder(hints);
     return sorted.find(h => h.is_released === 0) || null;
   },
@@ -105,7 +105,7 @@ export const PuzzleHintHelpers = {
   /**
    * Get all released hints for a puzzle
    */
-  getReleased(hints: (PuzzleHint | PuzzleHintParsed)[]): typeof hints {
+  getReleased<T extends PuzzleHint | PuzzleHintParsed>(hints: T[]): T[] {
     return this.sortByOrder(hints.filter(h => h.is_released === 1));
   },
 

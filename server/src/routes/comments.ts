@@ -31,8 +31,8 @@ router.get('/:entityType/:entityId', authenticate, requireProjectAccess('viewer'
   const commentMap = new Map<string, CommentNode>();
   const roots: CommentNode[] = [];
 
-  comments.forEach(comment => {
-    commentMap.set((comment as { id: string }).id, { ...comment, replies: [] } as CommentNode);
+  (comments as Record<string, unknown>[]).forEach(comment => {
+    commentMap.set((comment as { id: string }).id, { ...comment, replies: [] } as unknown as CommentNode);
   });
 
   comments.forEach(comment => {

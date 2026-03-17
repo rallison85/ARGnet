@@ -53,7 +53,7 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
   const { count } = db.prepare(countQuery).get(...countParams) as { count: number };
 
   res.json({
-    activities: activities.map(a => ({
+    activities: (activities as Record<string, unknown>[]).map(a => ({
       ...a,
       changes: (a as { changes: string | null }).changes ? JSON.parse((a as { changes: string }).changes) : null
     })),
@@ -125,7 +125,7 @@ router.get('/summary', authenticate, requireProjectAccess('viewer'), (req: AuthR
     activityByDay,
     activityByType,
     activeUsers,
-    recentActivity: recentActivity.map(a => ({
+    recentActivity: (recentActivity as Record<string, unknown>[]).map(a => ({
       ...a,
       changes: (a as { changes: string | null }).changes ? JSON.parse((a as { changes: string }).changes) : null
     }))

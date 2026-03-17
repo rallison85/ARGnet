@@ -43,12 +43,12 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
 
   const puzzles = db.prepare(query).all(...params);
 
-  res.json(puzzles.map(p => ({
+  res.json((puzzles as Record<string, unknown>[]).map(p => ({
     ...p,
-    hints: (p as { hints: string | null }).hints ? JSON.parse((p as { hints: string }).hints) : [],
-    prerequisites: (p as { prerequisites: string | null }).prerequisites ? JSON.parse((p as { prerequisites: string }).prerequisites) : [],
-    unlocks: (p as { unlocks: string | null }).unlocks ? JSON.parse((p as { unlocks: string }).unlocks) : [],
-    test_results: (p as { test_results: string | null }).test_results ? JSON.parse((p as { test_results: string }).test_results) : []
+    hints: p.hints ? JSON.parse(p.hints as string) : [],
+    prerequisites: p.prerequisites ? JSON.parse(p.prerequisites as string) : [],
+    unlocks: p.unlocks ? JSON.parse(p.unlocks as string) : [],
+    test_results: p.test_results ? JSON.parse(p.test_results as string) : []
   })));
 });
 
@@ -109,12 +109,12 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
 
   logActivity(req.params.projectId, req.user!.id, 'created', 'puzzle', puzzleId, title);
 
-  const puzzle = db.prepare('SELECT * FROM puzzles WHERE id = ?').get(puzzleId);
+  const puzzle = db.prepare('SELECT * FROM puzzles WHERE id = ?').get(puzzleId) as Record<string, unknown>;
   res.status(201).json({
     ...puzzle,
-    hints: (puzzle as { hints: string | null }).hints ? JSON.parse((puzzle as { hints: string }).hints) : [],
-    prerequisites: (puzzle as { prerequisites: string | null }).prerequisites ? JSON.parse((puzzle as { prerequisites: string }).prerequisites) : [],
-    unlocks: (puzzle as { unlocks: string | null }).unlocks ? JSON.parse((puzzle as { unlocks: string }).unlocks) : []
+    hints: puzzle.hints ? JSON.parse(puzzle.hints as string) : [],
+    prerequisites: puzzle.prerequisites ? JSON.parse(puzzle.prerequisites as string) : [],
+    unlocks: puzzle.unlocks ? JSON.parse(puzzle.unlocks as string) : []
   });
 });
 
@@ -225,12 +225,12 @@ router.patch('/:puzzleId', authenticate, requireProjectAccess('contributor'), (r
 
   logActivity(req.params.projectId, req.user!.id, 'updated', 'puzzle', req.params.puzzleId, req.body.title);
 
-  const puzzle = db.prepare('SELECT * FROM puzzles WHERE id = ?').get(req.params.puzzleId);
+  const puzzle = db.prepare('SELECT * FROM puzzles WHERE id = ?').get(req.params.puzzleId) as Record<string, unknown>;
   res.json({
     ...puzzle,
-    hints: (puzzle as { hints: string | null }).hints ? JSON.parse((puzzle as { hints: string }).hints) : [],
-    prerequisites: (puzzle as { prerequisites: string | null }).prerequisites ? JSON.parse((puzzle as { prerequisites: string }).prerequisites) : [],
-    unlocks: (puzzle as { unlocks: string | null }).unlocks ? JSON.parse((puzzle as { unlocks: string }).unlocks) : []
+    hints: puzzle.hints ? JSON.parse(puzzle.hints as string) : [],
+    prerequisites: puzzle.prerequisites ? JSON.parse(puzzle.prerequisites as string) : [],
+    unlocks: puzzle.unlocks ? JSON.parse(puzzle.unlocks as string) : []
   });
 });
 

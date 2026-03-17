@@ -37,11 +37,11 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
 
   const entries = db.prepare(query).all(...params);
 
-  res.json(entries.map(e => ({
+  res.json((entries as Record<string, unknown>[]).map(e => ({
     ...e,
-    related_characters: (e as { related_characters: string | null }).related_characters ? JSON.parse((e as { related_characters: string }).related_characters) : [],
-    related_locations: (e as { related_locations: string | null }).related_locations ? JSON.parse((e as { related_locations: string }).related_locations) : [],
-    tags: (e as { tags: string | null }).tags ? JSON.parse((e as { tags: string }).tags) : []
+    related_characters: e.related_characters ? JSON.parse(e.related_characters as string) : [],
+    related_locations: e.related_locations ? JSON.parse(e.related_locations as string) : [],
+    tags: e.tags ? JSON.parse(e.tags as string) : []
   })));
 });
 
@@ -121,12 +121,12 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
 
   logActivity(req.params.projectId, req.user!.id, 'created', 'lore_entry', entryId, title);
 
-  const entry = db.prepare('SELECT * FROM lore_entries WHERE id = ?').get(entryId);
+  const entry = db.prepare('SELECT * FROM lore_entries WHERE id = ?').get(entryId) as Record<string, unknown>;
   res.status(201).json({
     ...entry,
-    related_characters: (entry as { related_characters: string | null }).related_characters ? JSON.parse((entry as { related_characters: string }).related_characters) : [],
-    related_locations: (entry as { related_locations: string | null }).related_locations ? JSON.parse((entry as { related_locations: string }).related_locations) : [],
-    tags: (entry as { tags: string | null }).tags ? JSON.parse((entry as { tags: string }).tags) : []
+    related_characters: entry.related_characters ? JSON.parse(entry.related_characters as string) : [],
+    related_locations: entry.related_locations ? JSON.parse(entry.related_locations as string) : [],
+    tags: entry.tags ? JSON.parse(entry.tags as string) : []
   });
 });
 
@@ -242,12 +242,12 @@ router.patch('/:entryId', authenticate, requireProjectAccess('contributor'), (re
 
   logActivity(req.params.projectId, req.user!.id, 'updated', 'lore_entry', req.params.entryId, req.body.title);
 
-  const entry = db.prepare('SELECT * FROM lore_entries WHERE id = ?').get(req.params.entryId);
+  const entry = db.prepare('SELECT * FROM lore_entries WHERE id = ?').get(req.params.entryId) as Record<string, unknown>;
   res.json({
     ...entry,
-    related_characters: (entry as { related_characters: string | null }).related_characters ? JSON.parse((entry as { related_characters: string }).related_characters) : [],
-    related_locations: (entry as { related_locations: string | null }).related_locations ? JSON.parse((entry as { related_locations: string }).related_locations) : [],
-    tags: (entry as { tags: string | null }).tags ? JSON.parse((entry as { tags: string }).tags) : []
+    related_characters: entry.related_characters ? JSON.parse(entry.related_characters as string) : [],
+    related_locations: entry.related_locations ? JSON.parse(entry.related_locations as string) : [],
+    tags: entry.tags ? JSON.parse(entry.tags as string) : []
   });
 });
 

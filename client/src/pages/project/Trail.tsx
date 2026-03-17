@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -351,6 +351,11 @@ export default function ProjectTrail() {
     deleteEdgeMutation.mutate(edgeId);
   }, [deleteEdgeMutation]);
 
+  // Stable callback for TrailMapCanvas fitView registration
+  const handleFitViewReady = useCallback((fn: () => void) => {
+    fitViewFnRef.current = fn;
+  }, []);
+
   // Toolbar handlers
   const handleFitView = useCallback(() => {
     if (fitViewFnRef.current) {
@@ -429,7 +434,7 @@ export default function ProjectTrail() {
   };
 
   // Build highlighted nodes map and validation node IDs from validation results
-  const { highlightedNodesMap, validationNodeIds } = (() => {
+  const { highlightedNodesMap, validationNodeIds } = useMemo(() => {
     const map = new Map<string, 'unreachable' | 'orphan' | 'circular'>();
     const nodeIds: string[] = [];
 
@@ -455,7 +460,7 @@ export default function ProjectTrail() {
     }
 
     return { highlightedNodesMap: map, validationNodeIds: nodeIds };
-  })();
+  }, [validationResults, highlightIssues, selectedLayer]);
 
   // Check if any mutations are pending (for save indicator)
   const isSaving =
@@ -524,7 +529,7 @@ export default function ProjectTrail() {
               onEdgeDelete={handleEdgeDeleteDirect}
               selectedNodeId={selectedNodeId}
               selectedEdgeId={selectedEdgeId}
-              onFitViewReady={(fn) => { fitViewFnRef.current = fn; }}
+              onFitViewReady={handleFitViewReady}
               layerFilter={selectedLayer}
               highlightedNodes={highlightedNodesMap}
               validationNodeIds={validationNodeIds}

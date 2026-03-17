@@ -97,10 +97,10 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
 
   const assets = db.prepare(query).all(...params);
 
-  res.json(assets.map(a => ({
+  res.json((assets as Record<string, unknown>[]).map(a => ({
     ...a,
-    tags: (a as { tags: string | null }).tags ? JSON.parse((a as { tags: string }).tags) : [],
-    used_in: (a as { used_in: string | null }).used_in ? JSON.parse((a as { used_in: string }).used_in) : []
+    tags: a.tags ? JSON.parse(a.tags as string) : [],
+    used_in: a.used_in ? JSON.parse(a.used_in as string) : []
   })));
 });
 
@@ -140,11 +140,11 @@ router.post('/', authenticate, requireProjectAccess('contributor'), upload.singl
 
   logActivity(req.params.projectId, req.user!.id, 'uploaded', 'asset', assetId, name || req.file.originalname);
 
-  const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(assetId);
+  const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(assetId) as Record<string, unknown>;
   res.status(201).json({
     ...asset,
-    tags: (asset as { tags: string | null }).tags ? JSON.parse((asset as { tags: string }).tags) : [],
-    used_in: (asset as { used_in: string | null }).used_in ? JSON.parse((asset as { used_in: string }).used_in) : []
+    tags: asset.tags ? JSON.parse(asset.tags as string) : [],
+    used_in: asset.used_in ? JSON.parse(asset.used_in as string) : []
   });
 });
 
@@ -217,11 +217,11 @@ router.patch('/:assetId', authenticate, requireProjectAccess('contributor'), (re
     UPDATE assets SET ${updates.join(', ')} WHERE id = ? AND project_id = ?
   `).run(...values);
 
-  const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(req.params.assetId);
+  const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(req.params.assetId) as Record<string, unknown>;
   res.json({
     ...asset,
-    tags: (asset as { tags: string | null }).tags ? JSON.parse((asset as { tags: string }).tags) : [],
-    used_in: (asset as { used_in: string | null }).used_in ? JSON.parse((asset as { used_in: string }).used_in) : []
+    tags: asset.tags ? JSON.parse(asset.tags as string) : [],
+    used_in: asset.used_in ? JSON.parse(asset.used_in as string) : []
   });
 });
 
@@ -283,11 +283,11 @@ router.post('/:assetId/version', authenticate, requireProjectAccess('contributor
 
   logActivity(req.params.projectId, req.user!.id, 'updated_version', 'asset', req.params.assetId, currentAsset.name as string);
 
-  const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(req.params.assetId);
+  const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(req.params.assetId) as Record<string, unknown>;
   res.json({
     ...asset,
-    tags: (asset as { tags: string | null }).tags ? JSON.parse((asset as { tags: string }).tags) : [],
-    used_in: (asset as { used_in: string | null }).used_in ? JSON.parse((asset as { used_in: string }).used_in) : []
+    tags: asset.tags ? JSON.parse(asset.tags as string) : [],
+    used_in: asset.used_in ? JSON.parse(asset.used_in as string) : []
   });
 });
 

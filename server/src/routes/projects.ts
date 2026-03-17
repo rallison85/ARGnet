@@ -22,7 +22,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
     ORDER BY p.updated_at DESC
   `).all(req.user!.id);
 
-  res.json(projects.map(p => ({
+  res.json((projects as Record<string, unknown>[]).map(p => ({
     ...p,
     themes: p.themes ? JSON.parse(p.themes as string) : [],
     settings: p.settings ? JSON.parse(p.settings as string) : {}
@@ -44,7 +44,7 @@ router.get('/public', (req: AuthRequest, res: Response) => {
     ORDER BY p.created_at DESC
   `).all();
 
-  res.json(projects.map(p => ({
+  res.json((projects as Record<string, unknown>[]).map(p => ({
     ...p,
     themes: p.themes ? JSON.parse(p.themes as string) : []
   })));
@@ -104,12 +104,12 @@ router.post('/', authenticate, [
 
   logActivity(projectId, req.user!.id, 'created', 'project', projectId, name);
 
-  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Record<string, unknown>;
 
   res.status(201).json({
     ...project,
-    themes: (project as { themes: string | null }).themes ? JSON.parse((project as { themes: string }).themes) : [],
-    settings: (project as { settings: string | null }).settings ? JSON.parse((project as { settings: string }).settings) : {}
+    themes: project.themes ? JSON.parse(project.themes as string) : [],
+    settings: project.settings ? JSON.parse(project.settings as string) : {}
   });
 });
 
@@ -235,10 +235,10 @@ router.get('/:projectId/members', authenticate, requireProjectAccess('viewer'), 
     WHERE pm.project_id = ?
   `).all(req.params.projectId);
 
-  res.json(members.map(m => ({
+  res.json((members as Record<string, unknown>[]).map(m => ({
     ...m,
-    skills: (m as { skills: string | null }).skills ? JSON.parse((m as { skills: string }).skills) : [],
-    permissions: (m as { permissions: string | null }).permissions ? JSON.parse((m as { permissions: string }).permissions) : {}
+    skills: m.skills ? JSON.parse(m.skills as string) : [],
+    permissions: m.permissions ? JSON.parse(m.permissions as string) : {}
   })));
 });
 

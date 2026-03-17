@@ -367,6 +367,12 @@ router.post('/edges', authenticate, requireProjectAccess('contributor'), [
     return;
   }
 
+  // Prevent self-loop edges
+  if (sourceNodeId === targetNodeId) {
+    res.status(400).json({ error: 'Self-loop edges are not allowed (source and target must differ)' });
+    return;
+  }
+
   // Validate both nodes exist and belong to the same project
   const sourceNode = db.prepare('SELECT id FROM trail_map_nodes WHERE id = ? AND project_id = ?')
     .get(sourceNodeId, req.params.projectId);
@@ -511,6 +517,12 @@ router.post('/connections', authenticate, requireProjectAccess('contributor'), [
   const edgeType = req.body.connection_type || 'automatic';
   const conditionConfig = req.body.condition || null;
   const label = req.body.description || null;
+
+  // Prevent self-loop edges
+  if (sourceNodeId === targetNodeId) {
+    res.status(400).json({ error: 'Self-loop edges are not allowed (source and target must differ)' });
+    return;
+  }
 
   // Validate both nodes exist
   const sourceNode = db.prepare('SELECT id FROM trail_map_nodes WHERE id = ? AND project_id = ?')

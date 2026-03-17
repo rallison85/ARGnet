@@ -21,11 +21,11 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
     ORDER BY c.name ASC
   `).all(req.params.projectId);
 
-  res.json(characters.map(c => ({
+  res.json((characters as Record<string, unknown>[]).map(c => ({
     ...c,
-    aliases: (c as { aliases: string | null }).aliases ? JSON.parse((c as { aliases: string }).aliases) : [],
-    gallery: (c as { gallery: string | null }).gallery ? JSON.parse((c as { gallery: string }).gallery) : [],
-    tags: (c as { tags: string | null }).tags ? JSON.parse((c as { tags: string }).tags) : []
+    aliases: c.aliases ? JSON.parse(c.aliases as string) : [],
+    gallery: c.gallery ? JSON.parse(c.gallery as string) : [],
+    tags: c.tags ? JSON.parse(c.tags as string) : []
   })));
 });
 
@@ -80,12 +80,12 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
 
   logActivity(req.params.projectId, req.user!.id, 'created', 'character', characterId, name);
 
-  const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
+  const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId) as Record<string, unknown>;
   res.status(201).json({
     ...character,
-    aliases: (character as { aliases: string | null }).aliases ? JSON.parse((character as { aliases: string }).aliases) : [],
-    gallery: (character as { gallery: string | null }).gallery ? JSON.parse((character as { gallery: string }).gallery) : [],
-    tags: (character as { tags: string | null }).tags ? JSON.parse((character as { tags: string }).tags) : []
+    aliases: character.aliases ? JSON.parse(character.aliases as string) : [],
+    gallery: character.gallery ? JSON.parse(character.gallery as string) : [],
+    tags: character.tags ? JSON.parse(character.tags as string) : []
   });
 });
 
@@ -197,12 +197,12 @@ router.patch('/:characterId', authenticate, requireProjectAccess('contributor'),
 
   logActivity(req.params.projectId, req.user!.id, 'updated', 'character', req.params.characterId, req.body.name);
 
-  const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.characterId);
+  const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.characterId) as Record<string, unknown>;
   res.json({
     ...character,
-    aliases: (character as { aliases: string | null }).aliases ? JSON.parse((character as { aliases: string }).aliases) : [],
-    gallery: (character as { gallery: string | null }).gallery ? JSON.parse((character as { gallery: string }).gallery) : [],
-    tags: (character as { tags: string | null }).tags ? JSON.parse((character as { tags: string }).tags) : []
+    aliases: character.aliases ? JSON.parse(character.aliases as string) : [],
+    gallery: character.gallery ? JSON.parse(character.gallery as string) : [],
+    tags: character.tags ? JSON.parse(character.tags as string) : []
   });
 });
 

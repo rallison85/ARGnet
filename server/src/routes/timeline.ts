@@ -39,10 +39,10 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
 
   const events = db.prepare(query).all(...params);
 
-  res.json(events.map(e => ({
+  res.json((events as Record<string, unknown>[]).map(e => ({
     ...e,
-    related_characters: (e as { related_characters: string | null }).related_characters ? JSON.parse((e as { related_characters: string }).related_characters) : [],
-    related_locations: (e as { related_locations: string | null }).related_locations ? JSON.parse((e as { related_locations: string }).related_locations) : []
+    related_characters: e.related_characters ? JSON.parse(e.related_characters as string) : [],
+    related_locations: e.related_locations ? JSON.parse(e.related_locations as string) : []
   })));
 });
 
@@ -91,11 +91,11 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
 
   logActivity(req.params.projectId, req.user!.id, 'created', 'timeline_event', eventId, title);
 
-  const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(eventId);
+  const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(eventId) as Record<string, unknown>;
   res.status(201).json({
     ...event,
-    related_characters: (event as { related_characters: string | null }).related_characters ? JSON.parse((event as { related_characters: string }).related_characters) : [],
-    related_locations: (event as { related_locations: string | null }).related_locations ? JSON.parse((event as { related_locations: string }).related_locations) : []
+    related_characters: event.related_characters ? JSON.parse(event.related_characters as string) : [],
+    related_locations: event.related_locations ? JSON.parse(event.related_locations as string) : []
   });
 });
 
@@ -165,11 +165,11 @@ router.patch('/:eventId', authenticate, requireProjectAccess('contributor'), (re
     UPDATE timeline_events SET ${updates.join(', ')} WHERE id = ? AND project_id = ?
   `).run(...values);
 
-  const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(req.params.eventId);
+  const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(req.params.eventId) as Record<string, unknown>;
   res.json({
     ...event,
-    related_characters: (event as { related_characters: string | null }).related_characters ? JSON.parse((event as { related_characters: string }).related_characters) : [],
-    related_locations: (event as { related_locations: string | null }).related_locations ? JSON.parse((event as { related_locations: string }).related_locations) : []
+    related_characters: event.related_characters ? JSON.parse(event.related_characters as string) : [],
+    related_locations: event.related_locations ? JSON.parse(event.related_locations as string) : []
   });
 });
 

@@ -12,7 +12,6 @@ import ReactFlow, {
   NodeProps,
   Handle,
   Position,
-  addEdge,
   ReactFlowProvider,
   MarkerType,
 } from 'reactflow';
@@ -132,6 +131,10 @@ interface TrailMapCanvasProps {
 }
 
 export type ValidationIssueType = 'unreachable' | 'orphan' | 'circular' | null;
+
+// Stable references for default props to avoid re-render cascades
+const EMPTY_HIGHLIGHTED_NODES = new Map<string, 'unreachable' | 'orphan' | 'circular'>();
+const EMPTY_VALIDATION_NODE_IDS: string[] = [];
 
 interface CustomNodeData {
   originalNode: TrailMapNode;
@@ -364,8 +367,8 @@ function TrailMapCanvasInner({
   readOnly = false,
   onFitViewReady,
   layerFilter = 'both',
-  highlightedNodes = new Map(),
-  validationNodeIds = [],
+  highlightedNodes = EMPTY_HIGHLIGHTED_NODES,
+  validationNodeIds = EMPTY_VALIDATION_NODE_IDS,
 }: TrailMapCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -585,36 +588,20 @@ function TrailMapCanvasInner({
 
   /**
    * Handle connection creation
+   * Note: We intentionally do NOT add the edge to local state here.
+   * The parent component opens an EdgeForm modal, and on save the server
+   * round-trip + query invalidation populates the edge. Adding a local edge
+   * here would create a phantom edge if the user cancels the modal.
    */
   const handleConnect = useCallback(
     (connection: Connection) => {
       if (readOnly) return;
 
-      // Add edge to local state immediately for visual feedback
-      setEdges((eds) => addEdge({
-        ...connection,
-        animated: false,
-        type: 'customTrailEdge',
-        data: {
-          edge_type: 'automatic',
-          is_bidirectional: 0,
-          label: null,
-          is_active: 1,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 16,
-          height: 16,
-          color: '#6b7280',
-        },
-      }, eds));
-
-      // Call the optional callback for parent component to handle persistence
       if (connection.source && connection.target && onEdgeCreate) {
         onEdgeCreate(connection.source, connection.target);
       }
     },
-    [onEdgeCreate, readOnly, setEdges]
+    [onEdgeCreate, readOnly]
   );
 
   /**

@@ -184,7 +184,7 @@ export const LoreEntryHelpers = {
   /**
    * Sort entries by sort_order
    */
-  sortByOrder(entries: (LoreEntry | LoreEntryParsed)[]): typeof entries {
+  sortByOrder<T extends LoreEntry | LoreEntryParsed>(entries: T[]): T[] {
     return [...entries].sort((a, b) => a.sort_order - b.sort_order);
   },
 
@@ -250,17 +250,17 @@ export const LoreEntryHelpers = {
   /**
    * Filter top-level entries (no parent)
    */
-  filterTopLevel(entries: (LoreEntry | LoreEntryParsed)[]): typeof entries {
+  filterTopLevel<T extends LoreEntry | LoreEntryParsed>(entries: T[]): T[] {
     return entries.filter(e => !this.hasParent(e));
   },
 
   /**
    * Get child entries of a specific parent
    */
-  getChildren(
-    entries: (LoreEntry | LoreEntryParsed)[],
+  getChildren<T extends LoreEntry | LoreEntryParsed>(
+    entries: T[],
     parentId: string
-  ): typeof entries {
+  ): T[] {
     return entries.filter(e => e.parent_entry_id === parentId);
   },
 

@@ -43,7 +43,7 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
   const properties = db.prepare(query).all(...params);
 
   // Don't expose credentials in list view
-  res.json(properties.map(p => {
+  res.json((properties as Record<string, unknown>[]).map(p => {
     const prop = { ...p } as Record<string, unknown>;
     delete prop.credentials;
     return prop;

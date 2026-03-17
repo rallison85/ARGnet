@@ -35,10 +35,10 @@ router.get('/', authenticate, requireProjectAccess('viewer'), (req: AuthRequest,
 
   const locations = db.prepare(query).all(...params);
 
-  res.json(locations.map(loc => ({
+  res.json((locations as Record<string, unknown>[]).map(loc => ({
     ...loc,
-    imagery: (loc as { imagery: string | null }).imagery ? JSON.parse((loc as { imagery: string }).imagery) : [],
-    events: (loc as { events: string | null }).events ? JSON.parse((loc as { events: string }).events) : []
+    imagery: loc.imagery ? JSON.parse(loc.imagery as string) : [],
+    events: loc.events ? JSON.parse(loc.events as string) : []
   })));
 });
 
@@ -87,11 +87,11 @@ router.post('/', authenticate, requireProjectAccess('contributor'), [
 
   logActivity(req.params.projectId, req.user!.id, 'created', 'location', locationId, name);
 
-  const location = db.prepare('SELECT * FROM locations WHERE id = ?').get(locationId);
+  const location = db.prepare('SELECT * FROM locations WHERE id = ?').get(locationId) as Record<string, unknown>;
   res.status(201).json({
     ...location,
-    imagery: (location as { imagery: string | null }).imagery ? JSON.parse((location as { imagery: string }).imagery) : [],
-    events: (location as { events: string | null }).events ? JSON.parse((location as { events: string }).events) : []
+    imagery: location.imagery ? JSON.parse(location.imagery as string) : [],
+    events: location.events ? JSON.parse(location.events as string) : []
   });
 });
 
@@ -168,10 +168,10 @@ router.patch('/:locationId', authenticate, requireProjectAccess('contributor'), 
 
   logActivity(req.params.projectId, req.user!.id, 'updated', 'location', req.params.locationId, req.body.name);
 
-  const location = db.prepare('SELECT * FROM locations WHERE id = ?').get(req.params.locationId);
+  const location = db.prepare('SELECT * FROM locations WHERE id = ?').get(req.params.locationId) as Record<string, unknown>;
   res.json({
     ...location,
-    imagery: (location as { imagery: string | null }).imagery ? JSON.parse((location as { imagery: string }).imagery) : []
+    imagery: location.imagery ? JSON.parse(location.imagery as string) : []
   });
 });
 
