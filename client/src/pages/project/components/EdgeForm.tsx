@@ -46,6 +46,7 @@ export default function EdgeForm({
   // Parse condition config for conditional inputs
   const [conditionConfig, setConditionConfig] = useState<Record<string, unknown>>({});
 
+  // Parse initial condition_config on mount only
   useEffect(() => {
     if (form.condition_config) {
       try {
@@ -54,6 +55,7 @@ export default function EdgeForm({
         setConditionConfig({});
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only effect
   }, []);
 
   // Load puzzles for puzzle edge type

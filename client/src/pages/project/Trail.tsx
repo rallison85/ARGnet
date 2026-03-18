@@ -268,6 +268,7 @@ export default function ProjectTrail() {
 
   const handleNodePositionChange = useCallback((nodeId: string, x: number, y: number) => {
     updatePositionsMutation.mutate([{ id: nodeId, position_x: x, position_y: y }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- .mutate is stable in TanStack Query
   }, [updatePositionsMutation.mutate]);
 
   // Edge handlers
@@ -297,11 +298,13 @@ export default function ProjectTrail() {
         target_node_id: edge.source_node_id,
       },
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- .mutate is stable in TanStack Query
   }, [updateEdgeMutation.mutate]);
 
   // Direct edge delete (for keyboard delete, no confirmation)
   const handleEdgeDeleteDirect = useCallback((edgeId: string) => {
     deleteEdgeMutation.mutate(edgeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- .mutate is stable in TanStack Query
   }, [deleteEdgeMutation.mutate]);
 
   // Stable callback for TrailMapCanvas fitView registration
@@ -318,6 +321,7 @@ export default function ProjectTrail() {
 
   const handleValidate = useCallback(() => {
     validateMutation.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- .mutate is stable in TanStack Query
   }, [validateMutation.mutate]);
 
   const handleHighlightNode = useCallback((nodeId: string) => {
